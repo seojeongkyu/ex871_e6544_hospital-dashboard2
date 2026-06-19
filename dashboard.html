@@ -6,10 +6,782 @@
 <title>재원환자 처방 현황 대시보드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222638;
+    --border: #2e3350;
+    --accent: #4f8ef7;
+    --accent2: #7c5ef7;
+    --warn: #f7a94f;
+    --danger: #f75f5f;
+    --success: #4fd98e;
+    --text: #e8eaf6;
+    --muted: #8b90b0;
+    --font: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+  .date-badge {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 14px; font-size: 13px; color: var(--muted);
+  }
+  .upload-zone {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .upload-btn {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .upload-btn:hover { opacity: .85; }
+  .upload-btn.secondary {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  }
+  #fileInput { display: none; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); display: inline-block; margin-right: 6px;
+  }
+  .status-dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+  /* ── Layout ── */
+  .container { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+
+  /* ── KPI row ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .kpi-value { font-size: 32px; font-weight: 700; line-height: 1; }
+  .kpi-sub { font-size: 12px; color: var(--muted); }
+  .kpi-card.accent { border-color: var(--accent); }
+  .kpi-card.warn { border-color: var(--warn); }
+  .kpi-card.danger { border-color: var(--danger); }
+  .kpi-card.success { border-color: var(--success); }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .card-body { padding: 16px 20px; }
+
+  /* ── Ward table ── */
+  .ward-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ward-table th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .ward-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .ward-table tr:last-child td { border-bottom: none; }
+  .ward-table tr:hover td { background: var(--surface2); }
+
+  .bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .bar-bg { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .bar-pct { font-size: 11px; color: var(--muted); min-width: 32px; text-align: right; }
+
+  /* ── Tag ── */
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    border-radius: 4px; padding: 2px 7px;
+  }
+  .tag.ex871 { background: rgba(79,142,247,.18); color: #7ab3ff; }
+  .tag.e6544 { background: rgba(124,94,247,.18); color: #a98fff; }
+  .tag.unprescribed { background: rgba(247,95,95,.18); color: #ff8f8f; }
+  .tag.prescribed { background: rgba(79,217,142,.18); color: #6fffa9; }
+  .tag.insurance { background: rgba(247,169,79,.18); color: #ffca7a; }
+  .tag.car { background: rgba(79,247,225,.18); color: #7afff3; }
+
+  /* ── Patient table ── */
+  .pt-section { margin-bottom: 16px; }
+  .pt-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px 10px;
+  }
+  .pt-section-title { font-size: 14px; font-weight: 600; }
+  .filter-row { display: flex; gap: 8px; padding: 0 20px 12px; flex-wrap: wrap; }
+  .filter-btn {
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--muted); border-radius: 6px; padding: 5px 12px;
+    font-size: 12px; cursor: pointer; transition: all .15s;
+  }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,.1); }
+  .search-input {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 5px 12px;
+    font-size: 12px; outline: none; width: 160px;
+  }
+  .search-input:focus { border-color: var(--accent); }
+
+  .pt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .pt-table th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: 12px; background: var(--bg);
+    position: sticky; top: 57px;
+  }
+  .pt-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .pt-table tr.unprescribed td { background: rgba(247,95,95,.04); }
+  .pt-table tr:hover td { background: var(--surface2); }
+
+  .reason-input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 5px 10px;
+    font-size: 12px; width: 200px; outline: none;
+    font-family: var(--font);
+  }
+  .reason-input:focus { border-color: var(--warn); }
+  .save-btn {
+    background: var(--warn); color: #000; border: none;
+    border-radius: 6px; padding: 4px 10px; font-size: 11px;
+    font-weight: 700; cursor: pointer; margin-left: 6px;
+    transition: opacity .15s;
+  }
+  .save-btn:hover { opacity: .85; }
+
+  /* ── Highlight unprescribed ── */
+  .unpresc-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(247,95,95,.15); border: 1px solid rgba(247,95,95,.3);
+    color: var(--danger); border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 700;
+  }
+
+  /* ── Equipment table ── */
+  .equip-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .equip-table th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .equip-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); }
+  .equip-table tr:last-child td { border-bottom: none; }
+
+  /* ── Upload guidance ── */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; font-size: 13px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.4); z-index: 200;
+    transform: translateY(80px); opacity: 0;
+    transition: all .25s; pointer-events: none;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* ── Chart container ── */
+  .chart-wrap { position: relative; height: 200px; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    padding: 10px 20px; font-size: 13px; font-weight: 500;
+    border: none; background: none; color: var(--muted); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: all .15s;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Scrollable table ── */
+  .table-scroll { max-height: 380px; overflow-y: auto; }
+  .table-scroll::-webkit-scrollbar { width: 4px; }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 1100px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
 </head>
 <body>
+
+<!-- ═══════════════════════════════ HEADER ═══════════════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">🏥 재원환자 처방 대시보드</div>
+    <div class="date-badge" id="dateLabel">—</div>
+    <div id="statusDot"><span class="status-dot"></span><span id="statusText" style="font-size:12px;color:var(--muted)">데이터 없음</span></div>
+  </div>
+  <div class="upload-zone">
+    <span style="font-size:12px;color:var(--muted)">파일 업로드 (재원환자·EX871·E6544)</span>
+    <button class="upload-btn secondary" onclick="loadSampleData()">샘플 데이터</button>
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">📂 엑셀 업로드</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple onchange="handleFileUpload(event)">
+    <button class="upload-btn secondary" onclick="exportReport()">📄 보고서 출력</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<div class="container" id="mainContent">
+  <div class="empty-state" id="emptyState">
+    <div class="icon">📋</div>
+    <h3>재원환자 데이터를 업로드해 주세요</h3>
+    <p>
+      <strong>업로드 방법:</strong> 우측 상단 "엑셀 업로드" 버튼 클릭<br>
+      재원환자정보 파일 + EX871 파일 + E6544 파일을 동시에 선택하세요.<br><br>
+      시트명 규칙: <code style="color:var(--accent)">재원환자</code> · <code style="color:var(--accent2)">EX871</code> · <code style="color:var(--accent2)">E6544</code><br><br>
+      매일 14시 자동 알림은 PC에서 작업 스케줄러(Windows) 또는 cron(Mac/Linux)으로 설정 가능합니다.
+    </p>
+    <br>
+    <button class="upload-btn" onclick="loadSampleData()" style="margin:auto">▶ 샘플 데이터로 미리보기</button>
+  </div>
+  <div id="dashContent" style="display:none">
+    <!-- KPI -->
+    <div class="kpi-row">
+      <div class="kpi-card accent">
+        <div class="kpi-label">총 재원환자</div>
+        <div class="kpi-value" id="kpi-total" style="color:var(--accent)">—</div>
+        <div class="kpi-sub">현재 입원 중</div>
+      </div>
+      <div class="kpi-card warn">
+        <div class="kpi-label">필터 대상 환자</div>
+        <div class="kpi-value" id="kpi-target" style="color:var(--warn)">—</div>
+        <div class="kpi-sub">조건 충족 환자 수</div>
+      </div>
+      <div class="kpi-card danger">
+        <div class="kpi-label">미처방 환자</div>
+        <div class="kpi-value" id="kpi-unprescribed" style="color:var(--danger)">—</div>
+        <div class="kpi-sub">EX871/E6544 미처방</div>
+      </div>
+      <div class="kpi-card success">
+        <div class="kpi-label">처방 완료</div>
+        <div class="kpi-value" id="kpi-prescribed" style="color:var(--success)">—</div>
+        <div class="kpi-sub">처방 완료 환자</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">처방률</div>
+        <div class="kpi-value" id="kpi-rate" style="color:var(--text)">—</div>
+        <div class="kpi-sub">전체 대비</div>
+      </div>
+    </div>
+
+    <!-- Row 1: Ward summary + Chart -->
+    <div class="grid-2" style="margin-bottom:16px">
+      <!-- Ward table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">병동별 대상 환자 현황</div>
+          <span style="font-size:12px;color:var(--muted)" id="wardCount">—</span>
+        </div>
+        <div class="table-scroll">
+          <table class="ward-table" id="wardTable">
+            <thead>
+              <tr>
+                <th>병동</th>
+                <th>대상</th>
+                <th>처방</th>
+                <th>미처방</th>
+                <th>처방률</th>
+              </tr>
+            </thead>
+            <tbody id="wardTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">병동별 처방 현황 (미처방 강조)</div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrap">
+            <canvas id="wardChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Equipment utilization -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <div class="card-title">병동별 장비 보유 · 처방 · 가동률 현황</div>
+        <span style="font-size:12px;color:var(--muted)">EX871 + E6544 처방 기준</span>
+      </div>
+      <div class="table-scroll">
+        <table class="equip-table" id="equipTable">
+          <thead>
+            <tr>
+              <th>병동</th>
+              <th>EX871 보유</th>
+              <th>EX871 처방</th>
+              <th>EX871 가동률</th>
+              <th>E6544 보유</th>
+              <th>E6544 처방</th>
+              <th>E6544 가동률</th>
+              <th>종합 가동률</th>
+            </tr>
+          </thead>
+          <tbody id="equipTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Row 3: Patient detail -->
+    <div class="card">
+      <div class="pt-section-header">
+        <div class="pt-section-title">📋 대상 환자 상세 목록 <span id="ptCountLabel" style="font-size:12px;color:var(--muted)"></span></div>
+      </div>
+      <!-- Tabs -->
+      <div class="tabs" style="padding: 0 20px">
+        <button class="tab-btn active" onclick="filterTab('all',this)">전체</button>
+        <button class="tab-btn" onclick="filterTab('unprescribed',this)">⚠ 미처방만</button>
+        <button class="tab-btn" onclick="filterTab('ex871',this)">EX871 대상</button>
+        <button class="tab-btn" onclick="filterTab('e6544',this)">E6544 대상</button>
+      </div>
+      <div class="filter-row">
+        <select class="filter-btn active" id="wardFilter" onchange="renderPatientTable()" style="padding:5px 8px;cursor:pointer;appearance:none;background:var(--surface2);color:var(--text)">
+          <option value="all">전체 병동</option>
+        </select>
+        <input class="search-input" id="ptSearch" placeholder="환자명 / 등록번호 검색" oninput="renderPatientTable()">
+        <span style="font-size:12px;color:var(--danger);margin-left:auto;align-self:center" id="unpresc-tip"></span>
+      </div>
+      <div class="table-scroll" style="max-height:440px">
+        <table class="pt-table">
+          <thead>
+            <tr>
+              <th>등록번호</th>
+              <th>환자명</th>
+              <th>나이</th>
+              <th>병동</th>
+              <th>재원일수</th>
+              <th>급종</th>
+              <th>주상병</th>
+              <th>EX871</th>
+              <th>E6544</th>
+              <th>미처방 사유</th>
+            </tr>
+          </thead>
+          <tbody id="ptTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
-window.location.href = "https://claude.ai";
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let state = {
+  patients: [],      // 전체 재원환자
+  ex871Codes: [],    // EX871 상병코드 목록
+  e6544Codes: [],    // E6544 상병코드 목록
+  ex871Prescribed: new Set(),  // 등록번호
+  e6544Prescribed: new Set(),
+  reasons: {},       // { 등록번호: 사유텍스트 }
+  equipment: {},     // { ward: { ex871: N, e6544: N } }
+  currentTab: 'all',
+  currentWard: 'all',
+};
+
+// ═══════════════════════════════════════════════════════════
+//  SAMPLE DATA
+// ═══════════════════════════════════════════════════════════
+function loadSampleData() {
+  // 샘플 상병코드
+  state.ex871Codes = ['M54','M51','G54','M47','M48','M50'];
+  state.e6544Codes = ['I63','I64','I61','G35','G20','G30','G10'];
+
+  const wards = ['3A병동','3B병동','4A병동','4B병동','5A병동','5B병동','6A병동'];
+  const insTypes = ['건강보험','건강보험','자보','건강보험','자보'];
+  const names = ['김철수','이영희','박민준','최수진','정대현','홍길동','강소희','윤태양','임채원','서지현',
+                 '오민수','배준혁','신나연','류세진','한지원','남도현','황민경','조태준','전민서','문하준'];
+  
+  const allCodes = [...state.ex871Codes, ...state.e6544Codes, 'J18','K92','N18','E11','I10','C50','S72'];
+  
+  state.patients = Array.from({length: 120}, (_,i) => {
+    const age = 45 + Math.floor(Math.random()*45);
+    const ward = wards[Math.floor(Math.random()*wards.length)];
+    const days = 1 + Math.floor(Math.random()*20);
+    const insType = insTypes[Math.floor(Math.random()*insTypes.length)];
+    const code = allCodes[Math.floor(Math.random()*allCodes.length)];
+    const id = `PT${String(100000+i).slice(1)}`;
+    return { id, name: names[i%names.length], age, ward, days, insType, code };
+  });
+
+  // EX871 처방된 환자 (대상 중 일부)
+  state.ex871Prescribed = new Set();
+  state.e6544Prescribed = new Set();
+  state.patients.forEach(p => {
+    const isEx871 = state.ex871Codes.some(c => p.code.startsWith(c));
+    const isE6544 = state.e6544Codes.some(c => p.code.startsWith(c));
+    if (isEx871 && Math.random() > 0.4) state.ex871Prescribed.add(p.id);
+    if (isE6544 && Math.random() > 0.4) state.e6544Prescribed.add(p.id);
+  });
+
+  // 장비 보유 수량 (샘플)
+  state.equipment = {};
+  wards.forEach(w => {
+    state.equipment[w] = {
+      ex871: 3 + Math.floor(Math.random()*5),
+      e6544: 2 + Math.floor(Math.random()*4),
+    };
+  });
+
+  state.reasons = {};
+  initDashboard();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILE UPLOAD
+// ═══════════════════════════════════════════════════════════
+function handleFileUpload(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+  
+  let pending = files.length;
+  state.ex871Codes = [];
+  state.e6544Codes = [];
+  state.ex871Prescribed = new Set();
+  state.e6544Prescribed = new Set();
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      wb.SheetNames.forEach(name => {
+        const sheet = wb.Sheets[name];
+        const data = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+        const upper = name.toUpperCase();
+
+        if (upper.includes('재원') || upper.includes('환자') || upper.includes('PATIENT')) {
+          parsePatientSheet(data);
+        }
+        if (upper.includes('EX871')) {
+          state.ex871Codes = extractCodes(data);
+          state.ex871Prescribed = extractPrescribedIds(data);
+        }
+        if (upper.includes('E6544')) {
+          state.e6544Codes = extractCodes(data);
+          state.e6544Prescribed = extractPrescribedIds(data);
+        }
+      });
+      pending--;
+      if (pending === 0) initDashboard();
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  event.target.value = '';
+}
+
+function parsePatientSheet(rows) {
+  if (!rows.length) return;
+  const header = rows[0].map(h => String(h).trim());
+  // 컬럼 자동 매핑 (한글/영문 혼용 대응)
+  const col = (keywords) => {
+    for (const k of keywords) {
+      const idx = header.findIndex(h => h.includes(k));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+  const idIdx   = col(['등록번호','환자번호','ID','id','No']);
+  const nameIdx = col(['환자명','성명','이름','name']);
+  const ageIdx  = col(['나이','연령','age','Age']);
+  const wardIdx = col(['병동','ward','Ward','입원병동']);
+  const daysIdx = col(['재원일수','입원일수','일수','days']);
+  const insIdx  = col(['급종','보험','보험종류','ins']);
+  const codeIdx = col(['상병','진단','ICD','code','상병코드','주상병']);
+
+  state.patients = rows.slice(1)
+    .filter(r => r[idIdx])
+    .map(r => ({
+      id:      String(r[idIdx] ?? '').trim(),
+      name:    String(r[nameIdx] ?? '').trim(),
+      age:     parseInt(r[ageIdx]) || 0,
+      ward:    String(r[wardIdx] ?? '').trim(),
+      days:    parseInt(r[daysIdx]) || 0,
+      insType: String(r[insIdx] ?? '').trim(),
+      code:    String(r[codeIdx] ?? '').trim(),
+    }));
+}
+
+function extractCodes(rows) {
+  // 컬럼에서 'M54','I63' 형식의 ICD 코드 추출
+  const codes = new Set();
+  rows.forEach(r => r.forEach(cell => {
+    const m = String(cell).match(/[A-Z]\d{2,3}(\.\d+)?/g);
+    if (m) m.forEach(c => codes.add(c.slice(0,3)));
+  }));
+  return [...codes];
+}
+
+function extractPrescribedIds(rows) {
+  // 처방된 환자 등록번호 추출 (등록번호 컬럼 탐색)
+  const ids = new Set();
+  if (!rows.length) return ids;
+  const header = rows[0].map(h=>String(h).trim());
+  const idIdx = header.findIndex(h=>h.includes('등록') || h.includes('번호') || h.includes('ID'));
+  if (idIdx < 0) return ids;
+  rows.slice(1).forEach(r => { if (r[idIdx]) ids.add(String(r[idIdx]).trim()); });
+  return ids;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILTER LOGIC
+// ═══════════════════════════════════════════════════════════
+function getTargetPatients() {
+  return state.patients.filter(p => {
+    const codeMatch =
+      state.ex871Codes.some(c => p.code.startsWith(c)) ||
+      state.e6544Codes.some(c => p.code.startsWith(c));
+    const ageOk  = p.age >= 70;
+    const daysOk = p.days <= 7;
+    const insOk  = p.insType === '건강보험' || p.insType === '자보';
+    return codeMatch && ageOk && daysOk && insOk;
+  });
+}
+
+function isPrescribed(p) {
+  return state.ex871Prescribed.has(p.id) || state.e6544Prescribed.has(p.id);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT DASHBOARD
+// ═══════════════════════════════════════════════════════════
+let wardChartInst = null;
+
+function initDashboard() {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+
+  const now = new Date();
+  document.getElementById('dateLabel').textContent =
+    `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
+  document.getElementById('statusDot').innerHTML =
+    '<span class="status-dot live"></span><span style="font-size:12px;color:var(--success)">데이터 로드됨</span>';
+
+  const targets = getTargetPatients();
+  const prescribed = targets.filter(isPrescribed);
+  const unprescribed = targets.filter(p => !isPrescribed(p));
+
+  // KPI
+  document.getElementById('kpi-total').textContent = state.patients.length;
+  document.getElementById('kpi-target').textContent = targets.length;
+  document.getElementById('kpi-unprescribed').textContent = unprescribed.length;
+  document.getElementById('kpi-prescribed').textContent = prescribed.length;
+  const rate = targets.length ? Math.round(prescribed.length / targets.length * 100) : 0;
+  document.getElementById('kpi-rate').textContent = rate + '%';
+
+  // Ward aggregation
+  const wards = {};
+  targets.forEach(p => {
+    if (!wards[p.ward]) wards[p.ward] = {total:0, prescribed:0, unprescribed:0};
+    wards[p.ward].total++;
+    isPrescribed(p) ? wards[p.ward].prescribed++ : wards[p.ward].unprescribed++;
+  });
+
+  // Ward table
+  const wardKeys = Object.keys(wards).sort();
+  document.getElementById('wardCount').textContent = `${wardKeys.length}개 병동`;
+  const tbody = document.getElementById('wardTableBody');
+  tbody.innerHTML = '';
+  wardKeys.forEach(w => {
+    const d = wards[w];
+    const pct = d.total ? Math.round(d.prescribed/d.total*100) : 0;
+    const fillColor = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warn)' : 'var(--danger)';
+    tbody.innerHTML += `<tr>
+      <td><strong>${w}</strong></td>
+      <td>${d.total}</td>
+      <td style="color:var(--success)">${d.prescribed}</td>
+      <td style="color:var(--danger);font-weight:700">${d.unprescribed}</td>
+      <td>
+        <div class="bar-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${fillColor}"></div></div>
+          <span class="bar-pct">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  // Chart
+  if (wardChartInst) wardChartInst.destroy();
+  wardChartInst = new Chart(document.getElementById('wardChart'), {
+    type: 'bar',
+    data: {
+      labels: wardKeys,
+      datasets: [
+        { label: '처방 완료', data: wardKeys.map(w=>wards[w].prescribed),
+          backgroundColor: 'rgba(79,217,142,.7)', borderRadius: 4 },
+        { label: '미처방', data: wardKeys.map(w=>wards[w].unprescribed),
+          backgroundColor: 'rgba(247,95,95,.85)', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#8b90b0', font:{size:11} } } },
+      scales: {
+        x: { stacked: true, ticks:{color:'#8b90b0'}, grid:{color:'#2e3350'} },
+        y: { stacked: true, ticks:{color:'#8b90b0'}, grid:{color:'#2e3350'} }
+      }
+    }
+  });
+
+  // Equipment table
+  const etbody = document.getElementById('equipTableBody');
+  etbody.innerHTML = '';
+  wardKeys.forEach(w => {
+    const eq = state.equipment[w] || {ex871:0, e6544:0};
+    const exPresc = targets.filter(p=>p.ward===w && state.ex871Prescribed.has(p.id)).length;
+    const e6Presc = targets.filter(p=>p.ward===w && state.e6544Prescribed.has(p.id)).length;
+    const exRate = eq.ex871 ? Math.min(100,Math.round(exPresc/eq.ex871*100)) : 0;
+    const e6Rate = eq.e6544 ? Math.min(100,Math.round(e6Presc/eq.e6544*100)) : 0;
+    const totalRate = Math.round((exRate+e6Rate)/2);
+    const rateColor = r => r>=80?'var(--success)':r>=50?'var(--warn)':'var(--danger)';
+    etbody.innerHTML += `<tr>
+      <td><strong>${w}</strong></td>
+      <td>${eq.ex871}</td><td>${exPresc}</td>
+      <td><div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:${exRate}%;background:${rateColor(exRate)}"></div></div><span class="bar-pct">${exRate}%</span></div></td>
+      <td>${eq.e6544}</td><td>${e6Presc}</td>
+      <td><div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:${e6Rate}%;background:${rateColor(e6Rate)}"></div></div><span class="bar-pct">${e6Rate}%</span></div></td>
+      <td style="font-weight:700;color:${rateColor(totalRate)}">${totalRate}%</td>
+    </tr>`;
+  });
+
+  // Ward filter dropdown
+  const wardSel = document.getElementById('wardFilter');
+  wardSel.innerHTML = '<option value="all">전체 병동</option>';
+  wardKeys.forEach(w => { wardSel.innerHTML += `<option value="${w}">${w}</option>`; });
+
+  renderPatientTable();
+  showToast(`✅ 데이터 로드 완료 — 대상 환자 ${targets.length}명 (미처방 ${unprescribed.length}명)`);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PATIENT TABLE
+// ═══════════════════════════════════════════════════════════
+function filterTab(tab, btn) {
+  state.currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPatientTable();
+}
+
+function renderPatientTable() {
+  let pts = getTargetPatients();
+  const tab = state.currentTab;
+  const ward = document.getElementById('wardFilter').value;
+  const search = document.getElementById('ptSearch').value.toLowerCase();
+
+  if (tab === 'unprescribed') pts = pts.filter(p => !isPrescribed(p));
+  if (tab === 'ex871') pts = pts.filter(p => state.ex871Codes.some(c=>p.code.startsWith(c)));
+  if (tab === 'e6544') pts = pts.filter(p => state.e6544Codes.some(c=>p.code.startsWith(c)));
+  if (ward !== 'all') pts = pts.filter(p => p.ward === ward);
+  if (search) pts = pts.filter(p => p.name.toLowerCase().includes(search) || p.id.toLowerCase().includes(search));
+
+  const unpresc = pts.filter(p=>!isPrescribed(p));
+  document.getElementById('ptCountLabel').textContent = `(${pts.length}명 표시 / 미처방 ${unpresc.length}명)`;
+  document.getElementById('unpresc-tip').textContent = unpresc.length > 0 ? `⚠ ${unpresc.length}명 처방 필요` : '';
+
+  const tbody = document.getElementById('ptTableBody');
+  tbody.innerHTML = '';
+  pts.forEach(p => {
+    const isEx = state.ex871Codes.some(c=>p.code.startsWith(c));
+    const isE6 = state.e6544Codes.some(c=>p.code.startsWith(c));
+    const exPresc = state.ex871Prescribed.has(p.id);
+    const e6Presc = state.e6544Prescribed.has(p.id);
+    const unpresc = !exPresc && !e6Presc;
+    const insTag = p.insType==='자보'?`<span class="tag car">자보</span>`:`<span class="tag insurance">건강보험</span>`;
+    const savedReason = state.reasons[p.id] || '';
+
+    tbody.innerHTML += `<tr class="${unpresc?'unprescribed':''}">
+      <td>${p.id}</td>
+      <td><strong>${p.name}</strong>${unpresc?'<br><span class="unpresc-badge">⚠ 미처방</span>':''}</td>
+      <td>${p.age}세</td>
+      <td>${p.ward}</td>
+      <td style="color:${p.days<=3?'var(--success)':'inherit'}">${p.days}일</td>
+      <td>${insTag}</td>
+      <td><code style="font-size:11px;color:var(--muted)">${p.code}</code></td>
+      <td>${isEx?(exPresc?'<span class="tag prescribed">처방 완료</span>':'<span class="tag unprescribed">미처방</span>'):'<span style="color:var(--muted);font-size:11px">해당없음</span>'}</td>
+      <td>${isE6?(e6Presc?'<span class="tag prescribed">처방 완료</span>':'<span class="tag unprescribed">미처방</span>'):'<span style="color:var(--muted);font-size:11px">해당없음</span>'}</td>
+      <td>
+        ${unpresc?`
+          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유 입력…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value">
+          <button class="save-btn" onclick="saveReason('${p.id}')">저장</button>
+        `:(savedReason?`<span style="font-size:11px;color:var(--muted)">${savedReason}</span>`:'<span style="color:var(--muted);font-size:11px">—</span>')}
+      </td>
+    </tr>`;
+  });
+}
+
+function saveReason(id) {
+  const val = document.getElementById(`reason-${id}`)?.value || '';
+  state.reasons[id] = val;
+  showToast(`💾 미처방 사유 저장 완료`);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportReport() {
+  const targets = getTargetPatients();
+  const rows = [['등록번호','환자명','나이','병동','재원일수','급종','주상병','EX871상태','E6544상태','미처방사유']];
+  targets.forEach(p => {
+    rows.push([
+      p.id, p.name, p.age, p.ward, p.days, p.insType, p.code,
+      state.ex871Prescribed.has(p.id)?'처방완료':'미처방',
+      state.e6544Prescribed.has(p.id)?'처방완료':'미처방',
+      state.reasons[p.id]||''
+    ]);
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '대상환자');
+  const now = new Date();
+  const fname = `재원환자처방현황_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast('📄 보고서 다운로드 완료');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Init date label ──
+document.getElementById('dateLabel').textContent =
+  new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit'}) + ' 기준';
 </script>
 </body>
 </html>
