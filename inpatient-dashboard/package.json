@@ -1,0 +1,29 @@
+{
+  "name": "inpatient-dashboard",
+  "version": "1.0.0",
+  "description": "A dashboard for managing inpatient data with filters and statistics.",
+  "main": "src/main.tsx",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "typescript": "^4.4.3",
+    "vite": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "^17.0.2",
+    "@types/react-dom": "^17.0.2"
+  },
+  "keywords": [
+    "react",
+    "dashboard",
+    "inpatient",
+    "healthcare"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
