@@ -370,6 +370,7 @@ let state = {
   reasons: {}, myWard: '',
   expandedWard: null, wardTab: 'all',
   isAdmin: false,
+  uploadDate: '',
   bedCounts: {
     '05병동': 29, '06병동': 20, '07병동': 50, '08병동': 53, '09병동': 52,
     '10병동': 52, '11병동': 47, '12병동': 51, '13병동': 28,
@@ -571,6 +572,31 @@ function handleDailyUpload(event) {
     showToast('⚠ 먼저 ① 기준표를 업로드해 주세요');
     event.target.value = ''; return;
   }
+
+  let detectedDate = '';
+  for (const file of files) {
+    const match = file.name.match(/(\d{4,8})/);
+    if (match) {
+      const dateStr = match[1];
+      if (dateStr.length === 8) {
+        detectedDate = `${dateStr.slice(0, 4)}.${dateStr.slice(4, 6)}.${dateStr.slice(6, 8)}`;
+        break;
+      } else if (dateStr.length === 6) {
+        detectedDate = `20${dateStr.slice(0, 2)}.${dateStr.slice(2, 4)}.${dateStr.slice(4, 6)}`;
+        break;
+      } else if (dateStr.length === 4) {
+        const year = new Date().getFullYear();
+        detectedDate = `${year}.${dateStr.slice(0, 2)}.${dateStr.slice(2, 4)}`;
+        break;
+      }
+    }
+  }
+  if (detectedDate) {
+    state.uploadDate = detectedDate;
+  } else {
+    state.uploadDate = '';
+  }
+
   let pending = files.length;
   let newPatients = null, newPrescriptions = null;
   files.forEach(file => {
@@ -660,6 +686,7 @@ function parsePrescriptionSheet(rows, header) {
 // SAMPLE DATA
 // ═══════════════════════════════════════════════════════════
 function loadSampleData() {
+  state.uploadDate = '';
   state.ex871Ref = [
     {code:'I509', name:'상세불명의 심부전'}, {code:'I639', name:'기타 뇌경색증'},
     {code:'J189', name:'상세불명의 폐렴'}, {code:'K746', name:'간경변증NOS'},
@@ -757,9 +784,13 @@ function initDashboard() {
   document.getElementById('dashContent').style.display = 'block';
   updateRefBanner();
 
-  const now = new Date();
-  document.getElementById('dateLabel').textContent =
-    `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
+  if (state.uploadDate) {
+    document.getElementById('dateLabel').textContent = `${state.uploadDate} 기준`;
+  } else {
+    const now = new Date();
+    document.getElementById('dateLabel').textContent =
+      `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
+  }
   document.getElementById('statusDotEl').className = 'status-dot live';
   document.getElementById('statusText').textContent = '오늘자 데이터 로드됨';
   document.getElementById('statusText').style.color = 'var(--success)';
