@@ -6,6 +6,9 @@
 <title>병동별 처방 권고 대시보드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
   :root {
     --bg: #eef5fb; --surface: #ffffff; --surface2: #f3f8fc; --border: #d6e6f2;
@@ -226,6 +229,7 @@
     <button class="upload-btn" id="dailyUploadBtn" onclick="onDailyUploadClick()">② 오늘자 재원·처방 업로드</button>
     <input type="file" id="dailyInput" accept=".xlsx,.xls" multiple onchange="handleDailyUpload(event)">
     <button class="upload-btn secondary" onclick="loadSampleData()">샘플 보기</button>
+    <button class="upload-btn secondary" id="firebaseConfigBtn" onclick="openFirebaseModal()" style="display:none; background: #e0ecfa; border-color: #2f7fd6; color: #2f7fd6;">📡 Firebase 설정</button>
     <button class="upload-btn secondary" id="adminToggleBtn" onclick="onAdminToggleClick()" title="관리자 모드" style="display:none">🔒 관리자</button>
   </div>
 </header>
@@ -243,6 +247,32 @@
         <button class="upload-btn" style="flex:1" onclick="submitAdminPin()">확인</button>
       </div>
       <div id="adminPinError" style="color:var(--danger);font-size:12px;margin-top:8px;display:none">PIN이 올바르지 않습니다</div>
+    </div>
+  </div>
+
+  <!-- Firebase 설정 모달 -->
+  <div id="firebaseConfigOverlay" style="display:none;position:fixed;inset:0;background:rgba(28,43,58,.45);z-index:300;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:14px;padding:28px 26px;width:340px;box-shadow:0 8px 30px rgba(0,0,0,.2);text-align:left;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px;color:var(--text);text-align:center;">📡 Firebase 실시간 동기화 설정</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.4;">Firebase Realtime Database 정보를 입력하면 다른 컴퓨터들과 실시간으로 데이터를 공유할 수 있습니다.</div>
+      
+      <div style="margin-bottom:10px;">
+        <label style="font-size:11.5px;font-weight:600;display:block;margin-bottom:4px;">API Key</label>
+        <input type="text" id="fbApiKey" placeholder="AIzaSy..." style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:11.5px;font-weight:600;display:block;margin-bottom:4px;">Project ID</label>
+        <input type="text" id="fbProjectId" placeholder="my-hospital-project" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11.5px;font-weight:600;display:block;margin-bottom:4px;">Database URL</label>
+        <input type="text" id="fbDatabaseURL" placeholder="https://my-hospital-project-default-rtdb.firebaseio.com" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+      </div>
+      
+      <div style="display:flex;gap:8px">
+        <button class="upload-btn secondary" style="flex:1" onclick="closeFirebaseModal()">취소</button>
+        <button class="upload-btn" style="flex:1;background:var(--success);" onclick="saveFirebaseConfig()">저장 및 연결</button>
+      </div>
     </div>
   </div>
 
@@ -380,6 +410,134 @@ let state = {
 const ADMIN_PIN = '9780';
 const PRESC_CODE_MAP = { 'L270098': 'EX871', 'L270097': 'E6544' };
 
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "",
+  appId: ""
+};
+
+let db = null;
+function initFirebase() {
+  const savedConfig = localStorage.getItem('hosp_firebase_config');
+  let config = firebaseConfig;
+  if (savedConfig) {
+    try { config = JSON.parse(savedConfig); } catch(e) {}
+  }
+  if (!config || !config.apiKey || config.apiKey.startsWith('YOUR_')) {
+    console.log("Firebase is not configured yet.");
+    return;
+  }
+  try {
+    firebase.initializeApp(config);
+    db = firebase.database();
+    
+    // Listen for changes
+    db.ref('dashboard').on('value', snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+      
+      let changed = false;
+      if (data.reference) {
+        if (JSON.stringify(state.ex871Ref) !== JSON.stringify(data.reference.ex871Ref || [])) {
+          state.ex871Ref = data.reference.ex871Ref || [];
+          localStorage.setItem('hosp_ex871_ref', JSON.stringify(state.ex871Ref));
+          changed = true;
+        }
+        if (JSON.stringify(state.e6544Ref) !== JSON.stringify(data.reference.e6544Ref || [])) {
+          state.e6544Ref = data.reference.e6544Ref || [];
+          localStorage.setItem('hosp_e6544_ref', JSON.stringify(state.e6544Ref));
+          changed = true;
+        }
+        if (JSON.stringify(state.bedCounts) !== JSON.stringify(data.reference.bedCounts || {})) {
+          state.bedCounts = data.reference.bedCounts || {};
+          localStorage.setItem('hosp_bed_counts', JSON.stringify(state.bedCounts));
+          changed = true;
+        }
+      }
+      
+      if (data.daily) {
+        if (JSON.stringify(state.patients) !== JSON.stringify(data.daily.patients || [])) {
+          state.patients = data.daily.patients || [];
+          localStorage.setItem('hosp_patients', JSON.stringify(state.patients));
+          changed = true;
+        }
+        if (JSON.stringify(state.prescriptions) !== JSON.stringify(data.daily.prescriptions || [])) {
+          state.prescriptions = data.daily.prescriptions || [];
+          localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
+          changed = true;
+        }
+        if (state.uploadDate !== (data.daily.uploadDate || '')) {
+          state.uploadDate = data.daily.uploadDate || '';
+          localStorage.setItem('hosp_upload_date', state.uploadDate);
+          changed = true;
+        }
+        if (JSON.stringify(state.reasons) !== JSON.stringify(data.daily.reasons || {})) {
+          state.reasons = data.daily.reasons || {};
+          localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+          changed = true;
+        }
+      }
+      
+      if (changed) {
+        updateRefBanner();
+        if (state.patients.length > 0) {
+          initDashboard();
+        }
+      }
+    });
+    console.log("Firebase initialized successfully");
+  } catch(e) {
+    console.error("Firebase init failed:", e);
+  }
+}
+
+function openFirebaseModal() {
+  document.getElementById('firebaseConfigOverlay').style.display = 'flex';
+  const savedConfig = localStorage.getItem('hosp_firebase_config');
+  let config = firebaseConfig;
+  if (savedConfig) {
+    try { config = JSON.parse(savedConfig); } catch(e) {}
+  }
+  
+  document.getElementById('fbApiKey').value = (config.apiKey && !config.apiKey.startsWith('YOUR_')) ? config.apiKey : '';
+  document.getElementById('fbProjectId').value = (config.projectId && !config.projectId.startsWith('YOUR_')) ? config.projectId : '';
+  document.getElementById('fbDatabaseURL').value = (config.databaseURL && !config.databaseURL.startsWith('YOUR_')) ? config.databaseURL : '';
+}
+
+function closeFirebaseModal() {
+  document.getElementById('firebaseConfigOverlay').style.display = 'none';
+}
+
+function saveFirebaseConfig() {
+  const apiKey = document.getElementById('fbApiKey').value.trim();
+  const projectId = document.getElementById('fbProjectId').value.trim();
+  const databaseURL = document.getElementById('fbDatabaseURL').value.trim();
+  
+  if (!apiKey || !projectId || !databaseURL) {
+    showToast('⚠ 모든 정보를 입력해주세요');
+    return;
+  }
+  
+  const config = {
+    apiKey: apiKey,
+    authDomain: `${projectId}.firebaseapp.com`,
+    databaseURL: databaseURL,
+    projectId: projectId,
+    storageBucket: `${projectId}.appspot.com`,
+    messagingSenderId: "",
+    appId: ""
+  };
+  
+  localStorage.setItem('hosp_firebase_config', JSON.stringify(config));
+  closeFirebaseModal();
+  showToast('💾 Firebase 설정 저장됨. 페이지를 새로고침하여 적용합니다.');
+  setTimeout(() => location.reload(), 1500);
+}
+
 const EQUIPMENT_INVENTORY = {
   '05병동': 10, '06병동': 5, '07병동': 15, '08병동': 15, '09병동': 15,
   '10병동': 15, '11병동': 15, '12병동': 15, '13병동': 13,
@@ -413,6 +571,13 @@ function saveRefToStorage() {
     localStorage.setItem('hosp_e6544_ref', JSON.stringify(state.e6544Ref));
     localStorage.setItem('hosp_bed_counts', JSON.stringify(state.bedCounts));
   } catch(e) {}
+  if (db) {
+    db.ref('dashboard/reference').set({
+      ex871Ref: state.ex871Ref,
+      e6544Ref: state.e6544Ref,
+      bedCounts: state.bedCounts
+    });
+  }
 }
 function loadRefFromStorage() {
   try {
@@ -432,6 +597,14 @@ function saveDailyDataToStorage() {
     localStorage.setItem('hosp_upload_date', state.uploadDate);
     localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
   } catch(e) {}
+  if (db) {
+    db.ref('dashboard/daily').set({
+      patients: state.patients,
+      prescriptions: state.prescriptions,
+      uploadDate: state.uploadDate,
+      reasons: state.reasons
+    });
+  }
 }
 function loadDailyDataFromStorage() {
   try {
@@ -461,6 +634,7 @@ function saveAdminState(val) {
 function updateAdminUI() {
   const show = state.isAdmin ? 'inline-block' : 'none';
   document.getElementById('refUploadBtn').style.display = show;
+  document.getElementById('firebaseConfigBtn').style.display = show;
   // adminToggleBtn은 관리자 모드일 때만 노출(잠금용). 진입은 오직 "② 오늘자 업로드" 클릭을 통해서만 가능.
   const btn = document.getElementById('adminToggleBtn');
   btn.style.display = show;
@@ -1163,6 +1337,9 @@ function saveReason(id) {
   try {
     localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
   } catch(e) {}
+  if (db) {
+    db.ref('dashboard/daily/reasons').set(state.reasons);
+  }
   showToast('💾 미처방 사유 저장 완료');
 }
 
@@ -1285,6 +1462,8 @@ if (loadRefFromStorage()) updateRefBanner();
 state.myWard = loadMyWard();
 state.isAdmin = loadAdminState();
 updateAdminUI();
+
+initFirebase();
 
 if (loadDailyDataFromStorage()) {
   initDashboard();
