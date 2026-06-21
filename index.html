@@ -438,6 +438,54 @@ function initFirebase() {
     // Listen for changes
     db.ref('dashboard').on('value', snapshot => {
       const data = snapshot.val();
+      
+      // Auto-sync local cache to cloud if cloud has missing areas
+      let syncedLocalToCloud = false;
+      if (!data) {
+        const hasRef = state.ex871Ref.length > 0 || state.e6544Ref.length > 0;
+        const hasDaily = state.patients.length > 0;
+        if (hasRef || hasDaily) {
+          if (hasRef) {
+            db.ref('dashboard/reference').set({
+              ex871Ref: state.ex871Ref,
+              e6544Ref: state.e6544Ref,
+              bedCounts: state.bedCounts
+            });
+          }
+          if (hasDaily) {
+            db.ref('dashboard/daily').set({
+              patients: state.patients,
+              prescriptions: state.prescriptions,
+              uploadDate: state.uploadDate,
+              reasons: state.reasons
+            });
+          }
+          syncedLocalToCloud = true;
+        }
+      } else {
+        if (!data.reference && (state.ex871Ref.length > 0 || state.e6544Ref.length > 0)) {
+          db.ref('dashboard/reference').set({
+            ex871Ref: state.ex871Ref,
+            e6544Ref: state.e6544Ref,
+            bedCounts: state.bedCounts
+          });
+          syncedLocalToCloud = true;
+        }
+        if (!data.daily && state.patients.length > 0) {
+          db.ref('dashboard/daily').set({
+            patients: state.patients,
+            prescriptions: state.prescriptions,
+            uploadDate: state.uploadDate,
+            reasons: state.reasons
+          });
+          syncedLocalToCloud = true;
+        }
+      }
+      
+      if (syncedLocalToCloud) {
+        showToast('📡 로컬 캐시를 클라우드에 자동 동기화했습니다');
+      }
+
       if (!data) return;
       
       let changed = false;
