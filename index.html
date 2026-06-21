@@ -425,6 +425,27 @@ function loadRefFromStorage() {
     return state.ex871Ref.length > 0 || state.e6544Ref.length > 0;
   } catch(e) { return false; }
 }
+function saveDailyDataToStorage() {
+  try {
+    localStorage.setItem('hosp_patients', JSON.stringify(state.patients));
+    localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
+    localStorage.setItem('hosp_upload_date', state.uploadDate);
+    localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+  } catch(e) {}
+}
+function loadDailyDataFromStorage() {
+  try {
+    const pts = localStorage.getItem('hosp_patients');
+    const prescs = localStorage.getItem('hosp_prescriptions');
+    const udate = localStorage.getItem('hosp_upload_date');
+    const reasons = localStorage.getItem('hosp_reasons');
+    if (pts) state.patients = JSON.parse(pts);
+    if (prescs) state.prescriptions = JSON.parse(prescs);
+    if (udate) state.uploadDate = udate;
+    if (reasons) state.reasons = JSON.parse(reasons);
+    return state.patients && state.patients.length > 0;
+  } catch(e) { return false; }
+}
 function saveMyWard() { try { localStorage.setItem('hosp_my_ward', state.myWard); } catch(e) {} }
 function loadMyWard() { try { return localStorage.getItem('hosp_my_ward') || ''; } catch(e) { return ''; } }
 
@@ -618,6 +639,7 @@ function handleDailyUpload(event) {
       if (pending === 0) {
         if (newPatients) state.patients = newPatients;
         if (newPrescriptions) state.prescriptions = newPrescriptions;
+        saveDailyDataToStorage();
         initDashboard();
       }
     };
@@ -729,6 +751,7 @@ function loadSampleData() {
   });
 
   updateRefBanner();
+  saveDailyDataToStorage();
   initDashboard();
 }
 
@@ -1137,6 +1160,9 @@ function renderWardPrescribedAnyTable(ward) {
 function saveReason(id) {
   const val = document.getElementById(`reason-${id}`)?.value || '';
   state.reasons[id] = val;
+  try {
+    localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+  } catch(e) {}
   showToast('💾 미처방 사유 저장 완료');
 }
 
@@ -1259,6 +1285,10 @@ if (loadRefFromStorage()) updateRefBanner();
 state.myWard = loadMyWard();
 state.isAdmin = loadAdminState();
 updateAdminUI();
+
+if (loadDailyDataFromStorage()) {
+  initDashboard();
+}
 </script>
 </body>
 </html>
