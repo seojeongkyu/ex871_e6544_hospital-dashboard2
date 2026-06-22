@@ -57,6 +57,25 @@
   .hero-stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .hero-stat-num.warn { color: var(--warn); }
   .hero-stat-num.danger { color: var(--danger); }
+  .hero-stat-urgent {
+    background: #fff0f0;
+    border: 2px solid #e74c3c;
+    border-radius: 12px;
+    padding: 10px 18px;
+    box-shadow: 0 0 0 0 rgba(231,76,60,0.4);
+    animation: urgentPulse 1.8s ease-in-out infinite;
+  }
+  .hero-waiting-num {
+    font-size: 34px !important;
+    font-weight: 900 !important;
+    color: #c0392b !important;
+    line-height: 1;
+  }
+  @keyframes urgentPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(231,76,60,0.45); }
+    60%  { box-shadow: 0 0 0 8px rgba(231,76,60,0); }
+    100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); }
+  }
   .hero-cta { font-size: 12.5px; color: var(--warn); font-weight: 600; margin-top: 6px; }
 
   /* ── 내 병동 선택 바 ── */
@@ -308,9 +327,9 @@
           <div class="hero-stat-num" id="hero-rec-target">—</div>
           <div class="hero-stat-label">권고대상</div>
         </div>
-        <div class="hero-stat">
-          <div class="hero-stat-num warn" id="hero-rec-waiting">—</div>
-          <div class="hero-stat-label">아직 대기중</div>
+        <div class="hero-stat hero-stat-urgent" id="hero-stat-waiting-wrap">
+          <div class="hero-stat-num hero-waiting-num" id="hero-rec-waiting">—</div>
+          <div class="hero-stat-label" style="color:#c0392b;font-weight:700;">⚠ 아직 대기중</div>
         </div>
         <div class="hero-stat">
           <div class="hero-stat-num" id="hero-rec-rate">—</div>
@@ -1149,6 +1168,29 @@ function renderHeroBanner() {
   document.getElementById('hero-rec-target').textContent = recTargets.length;
   document.getElementById('hero-rec-waiting').textContent = recWaiting.length;
   document.getElementById('hero-rec-rate').textContent = recRate + '%';
+
+  // 대기 중 인원이 있으면 빨간 강조 박스 + 펄스, 0명이면 초록색으로 전환
+  const urgentWrap = document.getElementById('hero-stat-waiting-wrap');
+  const waitingNum = document.getElementById('hero-rec-waiting');
+  const waitingLabel = urgentWrap.querySelector('.hero-stat-label');
+  if (recWaiting.length > 0) {
+    urgentWrap.className = 'hero-stat hero-stat-urgent';
+    waitingNum.className = 'hero-stat-num hero-waiting-num';
+    waitingLabel.style.color = '#c0392b';
+    waitingLabel.textContent = '⚠ 아직 대기중';
+  } else {
+    urgentWrap.className = 'hero-stat';
+    urgentWrap.style.background = '#f0faf4';
+    urgentWrap.style.border = '2px solid var(--success)';
+    urgentWrap.style.borderRadius = '12px';
+    urgentWrap.style.padding = '10px 18px';
+    urgentWrap.style.animation = 'none';
+    waitingNum.className = 'hero-stat-num';
+    waitingNum.style.color = 'var(--success)';
+    waitingNum.style.fontSize = '34px';
+    waitingLabel.style.color = 'var(--success)';
+    waitingLabel.textContent = '✅ 전원 처방 완료';
+  }
 
   const subText = recWaiting.length > 0
     ? `현재 권고대상 ${recTargets.length}명 중 ${recWaiting.length}명이 아직 처방 대기중입니다. 여러분의 노고로 환자 안전을 지킬 수 있습니다 🙏`
