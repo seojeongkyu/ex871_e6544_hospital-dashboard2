@@ -21,7 +21,10 @@
     box-shadow: 0 1px 3px rgba(47,127,214,.06); }
   .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .logo { font-size: 17px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
-  .date-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 13px; color: var(--muted); }
+  .date-badge-block { display: flex; flex-direction: column; gap: 1px; }
+  .date-badge-main { background: var(--surface2); border: 1.5px solid var(--accent); border-radius: 8px;
+    padding: 7px 16px; font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: -0.3px; }
+  .date-badge-sub { font-size: 11px; color: var(--muted); padding-left: 4px; font-weight: 500; }
   .upload-zone { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .upload-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 14px;
     font-size: 12.5px; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
@@ -217,7 +220,11 @@
 <header class="header">
   <div class="header-left">
     <div class="logo">🏥 병동별 처방 권고 대시보드</div>
-    <div class="date-badge" id="dateLabel">—</div>
+    <div class="date-badge-block">
+      <div class="date-badge-main" id="dateLabel">—</div>
+      <div class="date-badge-sub" id="dateLabelSub"></div>
+    </div>
+    <button class="upload-btn secondary" id="calendarBtn" onclick="openCalendarModal()" title="날짜별 데이터 보기" style="display:none">📅 날짜 선택</button>
     <div><span class="status-dot" id="statusDotEl"></span><span id="statusText" style="font-size:12px;color:var(--muted)">기준표 필요</span></div>
   </div>
   <div class="upload-zone">
@@ -231,6 +238,22 @@
 </header>
 
 <div class="container">
+  <!-- 캘린더(날짜별 데이터 조회) 모달 -->
+  <div id="calendarOverlay" style="display:none;position:fixed;inset:0;background:rgba(28,43,58,.45);z-index:300;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:14px;padding:22px;width:300px;box-shadow:0 8px 30px rgba(0,0,0,.2);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <button onclick="calendarPrevMonth()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:2px 8px;">‹</button>
+        <div id="calendarMonthLabel" style="font-weight:700;font-size:14.5px;color:var(--text);"></div>
+        <button onclick="calendarNextMonth()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:2px 8px;">›</button>
+      </div>
+      <div id="calendarGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:12px;"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;">🔵 데이터가 있는 날짜만 클릭할 수 있습니다</div>
+      <div style="margin-top:14px;text-align:right;">
+        <button class="upload-btn secondary" onclick="closeCalendarModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 관리자 PIN 입력 모달 -->
   <div id="adminPinOverlay" style="display:none;position:fixed;inset:0;background:rgba(28,43,58,.45);z-index:300;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:14px;padding:28px 26px;width:280px;box-shadow:0 8px 30px rgba(0,0,0,.2);text-align:center;">
@@ -249,6 +272,11 @@
   <div class="ref-banner" id="refBanner" style="display:none">
     <span>📋 기준표 로드됨: EX871 <strong id="refExCount">0</strong>개 상병 · E6544 <strong id="refE6Count">0</strong>개 상병</span>
     <button class="upload-btn secondary" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('refInput').click()">기준표 다시 업로드</button>
+  </div>
+
+  <div class="ref-banner" id="historyBanner" style="display:none; background:#fff4e0; border-color:#f0d28a;">
+    <span id="historyBannerText">📅 과거 데이터를 보고 있습니다</span>
+    <button class="upload-btn secondary" style="padding:4px 10px;font-size:11px;background:var(--accent);color:#fff;border-color:var(--accent);" onclick="exitHistoryView()">최신 데이터로 돌아가기</button>
   </div>
 
   <div class="empty-state" id="emptyState">
@@ -270,7 +298,7 @@
       <div class="hero-main">
         <div class="hero-icon">🎉</div>
         <div>
-          <div class="hero-text-big">오늘 <span class="num" id="hero-total-presc">—</span>명 처방했어요!</div>
+          <div class="hero-text-big"><span id="hero-date-prefix">오늘</span> <span class="num" id="hero-total-presc">—</span>명 처방했어요!</div>
           <div class="hero-text-sub" id="hero-sub-text">EX871·E6544 처방 현황 — 모두 수고하셨습니다</div>
         </div>
       </div>
@@ -371,6 +399,9 @@ let state = {
   expandedWard: null, wardTab: 'all',
   isAdmin: false,
   uploadDate: '',
+  lastUpdatedAt: null,   // 업로드(실제 클릭) 시각 타임스탬프
+  viewingDate: null,     // 캘린더로 과거 날짜를 보고 있을 때 'YYYY-MM-DD'
+  liveSnapshot: null,    // 과거 날짜 보기 전, 최신 데이터를 임시 백업
   bedCounts: {
     '05병동': 29, '06병동': 20, '07병동': 50, '08병동': 53, '09병동': 52,
     '10병동': 52, '11병동': 47, '12병동': 51, '13병동': 28,
@@ -386,6 +417,15 @@ const PRESC_CODE_MAP = { 'L270098': 'EX871', 'L270097': 'E6544' };
 //   API Key/Project ID 같은 별도 설정 없이 URL 하나로 바로 동작합니다.
 // ═══════════════════════════════════════════════════════════
 const FIREBASE_DB_URL = 'https://ex871-e6544-hospital-dashboard-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// "2026.06.21" → "2026-06-21" (Firebase 키에는 '.' 사용 불가)
+function dateKeyFromUploadDate(ud) {
+  if (!ud) return null;
+  const parts = ud.split('.').map(s => s.trim()).filter(Boolean);
+  if (parts.length < 3) return null;
+  const y = parts[0], m = String(parseInt(parts[1],10)).padStart(2,'0'), d = String(parseInt(parts[2],10)).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
 
 async function syncToCloud() {
   try {
@@ -403,11 +443,29 @@ async function syncToCloud() {
           prescriptions: state.prescriptions,
           uploadDate: state.uploadDate,
           reasons: state.reasons,
+          lastUpdatedAt: state.lastUpdatedAt,
         },
         updatedAt: Date.now(),
       }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    // 날짜별 히스토리 스냅샷도 함께 저장 (캘린더에서 과거 날짜 조회용)
+    // 과거 데이터를 보는 중에는(state.viewingDate) 절대 히스토리를 덮어쓰지 않음
+    const dateKey = dateKeyFromUploadDate(state.uploadDate);
+    if (dateKey && state.patients.length && !state.viewingDate) {
+      await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dateKey}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patients: state.patients,
+          prescriptions: state.prescriptions,
+          reasons: state.reasons,
+          uploadDate: state.uploadDate,
+          lastUpdatedAt: state.lastUpdatedAt,
+        }),
+      });
+    }
   } catch (e) {
     console.warn('Firebase 동기화 실패:', e);
     showToast('⚠ 클라우드 동기화 실패 — 네트워크 확인 필요 (이 기기에는 저장됨)');
@@ -430,6 +488,7 @@ async function loadFromCloud() {
       if (data.daily.prescriptions) state.prescriptions = data.daily.prescriptions;
       if (data.daily.uploadDate !== undefined) state.uploadDate = data.daily.uploadDate;
       if (data.daily.reasons) state.reasons = data.daily.reasons;
+      if (data.daily.lastUpdatedAt !== undefined) state.lastUpdatedAt = data.daily.lastUpdatedAt;
     }
     // 로컬에도 캐싱(오프라인 대비)
     try {
@@ -440,6 +499,7 @@ async function loadFromCloud() {
       localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
       localStorage.setItem('hosp_upload_date', state.uploadDate);
       localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+      localStorage.setItem('hosp_last_updated_at', state.lastUpdatedAt || '');
     } catch(e) {}
     return { reachable: true, hasData: !!(data.reference || data.daily) };
   } catch (e) {
@@ -453,6 +513,7 @@ let cloudPollTimer = null;
 function startCloudPolling() {
   if (cloudPollTimer) return;
   cloudPollTimer = setInterval(async () => {
+    if (state.viewingDate) return; // 과거 데이터를 보는 중에는 최신 데이터로 화면을 덮어쓰지 않음
     const before = JSON.stringify({ p: state.patients, r: state.reasons, u: state.uploadDate, ex: state.ex871Ref, e6: state.e6544Ref });
     const result = await loadFromCloud();
     if (!result.hasData) return;
@@ -516,6 +577,7 @@ function saveDailyDataToStorage() {
     localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
     localStorage.setItem('hosp_upload_date', state.uploadDate);
     localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+    localStorage.setItem('hosp_last_updated_at', state.lastUpdatedAt || '');
   } catch(e) {}
   syncToCloud();
 }
@@ -525,10 +587,12 @@ function loadDailyDataFromStorage() {
     const prescs = localStorage.getItem('hosp_prescriptions');
     const udate = localStorage.getItem('hosp_upload_date');
     const reasons = localStorage.getItem('hosp_reasons');
+    const lua = localStorage.getItem('hosp_last_updated_at');
     if (pts) state.patients = JSON.parse(pts);
     if (prescs) state.prescriptions = JSON.parse(prescs);
     if (udate) state.uploadDate = udate;
     if (reasons) state.reasons = JSON.parse(reasons);
+    if (lua) state.lastUpdatedAt = parseInt(lua, 10) || null;
     return state.patients && state.patients.length > 0;
   } catch(e) { return false; }
 }
@@ -703,6 +767,9 @@ function handleDailyUpload(event) {
   } else {
     state.uploadDate = '';
   }
+  state.lastUpdatedAt = Date.now();
+  state.viewingDate = null;
+  state.liveSnapshot = null;
 
   let pending = files.length;
   let newPatients = null, newPrescriptions = null;
@@ -795,6 +862,9 @@ function parsePrescriptionSheet(rows, header) {
 // ═══════════════════════════════════════════════════════════
 function loadSampleData() {
   state.uploadDate = '';
+  state.lastUpdatedAt = null;
+  state.viewingDate = null;
+  state.liveSnapshot = null;
   state.ex871Ref = [
     {code:'I509', name:'상세불명의 심부전'}, {code:'I639', name:'기타 뇌경색증'},
     {code:'J189', name:'상세불명의 폐렴'}, {code:'K746', name:'간경변증NOS'},
@@ -898,11 +968,29 @@ function initDashboard() {
   } else {
     const now = new Date();
     document.getElementById('dateLabel').textContent =
-      `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
+      `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} 기준`;
   }
+  const subEl = document.getElementById('dateLabelSub');
+  if (state.lastUpdatedAt) {
+    const d = new Date(state.lastUpdatedAt);
+    subEl.textContent = `최종 업데이트 ${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  } else {
+    subEl.textContent = '';
+  }
+
+  document.getElementById('calendarBtn').style.display = 'inline-block';
+
+  const historyBanner = document.getElementById('historyBanner');
+  if (state.viewingDate) {
+    historyBanner.style.display = 'flex';
+    document.getElementById('historyBannerText').textContent = `📅 과거 데이터를 보고 있습니다 — ${state.uploadDate} 기준 (실시간 데이터 아님, 수정 불가)`;
+  } else {
+    historyBanner.style.display = 'none';
+  }
+
   document.getElementById('statusDotEl').className = 'status-dot live';
-  document.getElementById('statusText').textContent = '오늘자 데이터 로드됨';
-  document.getElementById('statusText').style.color = 'var(--success)';
+  document.getElementById('statusText').textContent = state.viewingDate ? '과거 데이터 보기 중' : '오늘자 데이터 로드됨';
+  document.getElementById('statusText').style.color = state.viewingDate ? 'var(--warn)' : 'var(--success)';
 
   state.myWard = loadMyWard();
 
@@ -914,6 +1002,16 @@ function initDashboard() {
 // ═══════════════════════════════════════════════════════════
 // 칭찬+독려 히어로 배너
 // ═══════════════════════════════════════════════════════════
+function formatKoreanMonthDay(uploadDateStr) {
+  // "2026.06.21" → "6월 21일"
+  if (!uploadDateStr) return null;
+  const parts = uploadDateStr.split('.').map(s => s.trim()).filter(Boolean);
+  if (parts.length < 3) return null;
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  if (!month || !day) return null;
+  return `${month}월 ${day}일`;
+}
 function renderHeroBanner() {
   const allTargets = getAllMatchedPatients();
   const recTargets = allTargets.filter(p=>p.isRecommended);
@@ -924,6 +1022,8 @@ function renderHeroBanner() {
   const e6544PrescIds = new Set(state.prescriptions.filter(x=>x.type==='E6544').map(x=>x.patientId));
   const totalPrescCount = new Set([...ex871PrescIds, ...e6544PrescIds]).size;
 
+  const koDate = formatKoreanMonthDay(state.uploadDate);
+  document.getElementById('hero-date-prefix').textContent = koDate ? `${koDate}에` : '오늘';
   document.getElementById('hero-total-presc').textContent = totalPrescCount;
   document.getElementById('hero-rec-target').textContent = recTargets.length;
   document.getElementById('hero-rec-waiting').textContent = recWaiting.length;
@@ -1194,8 +1294,8 @@ function renderWardPatientTable(ward) {
       <td>${e6Cell}</td>
       <td>
         ${showReasonInput?`
-          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value">
-          <button class="save-btn" onclick="saveReason('${p.id}')">저장</button>
+          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${state.viewingDate?'disabled':''}>
+          <button class="save-btn" onclick="saveReason('${p.id}')" ${state.viewingDate?'disabled':''}>저장</button>
         `:(savedReason?`<span style="font-size:11px;color:var(--muted)">${savedReason}</span>`:'<span style="color:var(--muted);font-size:11px">—</span>')}
       </td>
     </tr>`;
@@ -1244,6 +1344,10 @@ function renderWardPrescribedAnyTable(ward) {
 }
 
 function saveReason(id) {
+  if (state.viewingDate) {
+    showToast('⚠ 과거 데이터는 수정할 수 없습니다. 먼저 "최신 데이터로 돌아가기"를 눌러주세요');
+    return;
+  }
   const val = document.getElementById(`reason-${id}`)?.value || '';
   state.reasons[id] = val;
   try {
@@ -1251,6 +1355,122 @@ function saveReason(id) {
   } catch(e) {}
   syncToCloud();
   showToast('💾 미처방 사유 저장 완료');
+}
+
+// ═══════════════════════════════════════════════════════════
+// 캘린더 (날짜별 데이터 조회)
+// ═══════════════════════════════════════════════════════════
+let calendarViewYear, calendarViewMonth; // calendarViewMonth는 0-indexed
+let calendarAvailableDates = new Set();
+
+async function openCalendarModal() {
+  document.getElementById('calendarOverlay').style.display = 'flex';
+  let base;
+  if (state.viewingDate) {
+    base = new Date(state.viewingDate);
+  } else {
+    const k = dateKeyFromUploadDate(state.uploadDate);
+    base = k ? new Date(k) : new Date();
+  }
+  calendarViewYear = base.getFullYear();
+  calendarViewMonth = base.getMonth();
+  document.getElementById('calendarGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:14px 0;">불러오는 중...</div>';
+  await loadCalendarAvailableDates();
+  renderCalendarGrid();
+}
+function closeCalendarModal() {
+  document.getElementById('calendarOverlay').style.display = 'none';
+}
+async function loadCalendarAvailableDates() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    calendarAvailableDates = new Set(data ? Object.keys(data) : []);
+  } catch (e) {
+    console.warn('캘린더 날짜 목록 불러오기 실패', e);
+    calendarAvailableDates = new Set();
+  }
+}
+function calendarPrevMonth() {
+  calendarViewMonth--;
+  if (calendarViewMonth < 0) { calendarViewMonth = 11; calendarViewYear--; }
+  renderCalendarGrid();
+}
+function calendarNextMonth() {
+  calendarViewMonth++;
+  if (calendarViewMonth > 11) { calendarViewMonth = 0; calendarViewYear++; }
+  renderCalendarGrid();
+}
+function renderCalendarGrid() {
+  document.getElementById('calendarMonthLabel').textContent = `${calendarViewYear}년 ${calendarViewMonth+1}월`;
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+  const dow = ['일','월','화','수','목','금','토'];
+  dow.forEach(d => {
+    grid.innerHTML += `<div style="text-align:center;color:var(--muted);font-weight:600;padding:4px 0;">${d}</div>`;
+  });
+  const firstDay = new Date(calendarViewYear, calendarViewMonth, 1).getDay();
+  const daysInMonth = new Date(calendarViewYear, calendarViewMonth+1, 0).getDate();
+  for (let i=0; i<firstDay; i++) grid.innerHTML += `<div></div>`;
+  const t = new Date();
+  const todayKey = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const dateKey = `${calendarViewYear}-${String(calendarViewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hasData = calendarAvailableDates.has(dateKey);
+    const isViewing = state.viewingDate === dateKey || (!state.viewingDate && dateKeyFromUploadDate(state.uploadDate) === dateKey);
+    const isToday = dateKey === todayKey;
+    let style = 'text-align:center;padding:6px 0;border-radius:6px;';
+    if (hasData) {
+      style += isViewing
+        ? 'cursor:pointer;background:var(--accent);color:#fff;font-weight:700;'
+        : 'cursor:pointer;background:#e7f1fb;color:var(--accent);font-weight:700;';
+    } else {
+      style += 'color:var(--border);';
+    }
+    if (isToday) style += 'box-shadow:0 0 0 2px var(--accent2) inset;';
+    grid.innerHTML += `<div style="${style}" ${hasData ? `onclick="selectCalendarDate('${dateKey}')"` : ''}>${d}</div>`;
+  }
+}
+async function selectCalendarDate(dateKey) {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dateKey}.json`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data) { showToast('⚠ 해당 날짜의 데이터를 찾을 수 없습니다'); return; }
+    if (!state.viewingDate) {
+      // 과거 보기로 처음 진입 — 현재 라이브 데이터를 백업
+      state.liveSnapshot = {
+        patients: state.patients, prescriptions: state.prescriptions,
+        reasons: state.reasons, uploadDate: state.uploadDate, lastUpdatedAt: state.lastUpdatedAt,
+      };
+    }
+    state.patients = data.patients || [];
+    state.prescriptions = data.prescriptions || [];
+    state.reasons = data.reasons || {};
+    state.uploadDate = data.uploadDate || dateKey.replace(/-/g, '.');
+    state.lastUpdatedAt = data.lastUpdatedAt || null;
+    state.viewingDate = dateKey;
+    closeCalendarModal();
+    initDashboard();
+    showToast(`📅 ${state.uploadDate} 데이터를 보고 있습니다`);
+  } catch (e) {
+    console.warn(e);
+    showToast('⚠ 데이터를 불러오지 못했습니다');
+  }
+}
+function exitHistoryView() {
+  if (state.liveSnapshot) {
+    state.patients = state.liveSnapshot.patients;
+    state.prescriptions = state.liveSnapshot.prescriptions;
+    state.reasons = state.liveSnapshot.reasons;
+    state.uploadDate = state.liveSnapshot.uploadDate;
+    state.lastUpdatedAt = state.liveSnapshot.lastUpdatedAt;
+  }
+  state.viewingDate = null;
+  state.liveSnapshot = null;
+  initDashboard();
+  showToast('✅ 최신 데이터로 돌아왔습니다');
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -1,12 +1,2534 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>재원환자 처방 대시보드</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>병동별 처방 권고 대시보드</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #eef5fb;
+      --surface: #ffffff;
+      --surface2: #f3f8fc;
+      --border: #d6e6f2;
+      --accent: #2f7fd6;
+      --accent2: #4aa8c7;
+      --warn: #e0922e;
+      --danger: #e0524a;
+      --success: #2f9e6e;
+      --text: #1c2b3a;
+      --muted: #6b8299;
+      --font: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: linear-gradient(180deg, #eaf4fb 0%, #f6fafd 280px, #eef5fb 100%);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      flex-wrap: wrap;
+      gap: 10px;
+      box-shadow: 0 1px 3px rgba(47, 127, 214, .06);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .logo {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    .date-badge-block {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .date-badge-main {
+      background: var(--surface2);
+      border: 1.5px solid var(--accent);
+      border-radius: 8px;
+      padding: 7px 16px;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.3px;
+    }
+
+    .date-badge-sub {
+      font-size: 11px;
+      color: var(--muted);
+      padding-left: 4px;
+      font-weight: 500;
+    }
+
+    .upload-zone {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .upload-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+
+    .upload-btn:hover {
+      opacity: .85;
+    }
+
+    .upload-btn.secondary {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .upload-btn.ref {
+      background: var(--accent2);
+    }
+
+    input[type=file] {
+      display: none;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .status-dot.live {
+      background: var(--success);
+      box-shadow: 0 0 6px rgba(47, 158, 110, .5);
+    }
+
+    .status-dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 6px rgba(224, 146, 46, .5);
+    }
+
+    .container {
+      padding: 18px 24px;
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+
+    .ref-banner {
+      background: #f0eafc;
+      border: 1px solid #d9c9f5;
+      border-radius: 10px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* ── 칭찬+독려 히어로 배너 ── */
+    .hero-banner {
+      background: linear-gradient(135deg, #e3f6ed, #e8f3fb);
+      border: 1px solid #bfe8d4;
+      border-radius: 16px;
+      padding: 22px 26px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 10px rgba(47, 127, 214, .06);
+    }
+
+    .hero-main {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .hero-icon {
+      font-size: 38px;
+    }
+
+    .hero-text-big {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--success);
+      line-height: 1.3;
+    }
+
+    .hero-text-big .num {
+      font-size: 30px;
+    }
+
+    .hero-text-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .hero-divider {
+      width: 1px;
+      align-self: stretch;
+      background: var(--border);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 22px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    .hero-stat {
+      text-align: center;
+    }
+
+    .hero-stat-num {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .hero-stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .hero-stat-num.warn {
+      color: var(--warn);
+    }
+
+    .hero-stat-num.danger {
+      color: var(--danger);
+    }
+
+    .hero-cta {
+      font-size: 12.5px;
+      color: var(--warn);
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    /* ── 내 병동 선택 바 ── */
+    .myward-bar {
+      background: linear-gradient(135deg, #e7f1fb, #eef2fb);
+      border: 1px solid #c5dcf4;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .myward-bar label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .myward-bar select {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13.5px;
+      font-weight: 600;
+      outline: none;
+      min-width: 160px;
+      cursor: pointer;
+    }
+
+    .myward-summary {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .myward-summary strong {
+      color: var(--danger);
+    }
+
+    /* ── 병동 카드 그리드 ── */
+    .ward-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    .ward-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+      box-shadow: 0 1px 4px rgba(47, 127, 214, .05);
+    }
+
+    .ward-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(47, 127, 214, .12);
+    }
+
+    .ward-card.expanded {
+      border-color: var(--accent);
+      background: var(--surface2);
+    }
+
+    .ward-card.is-my-ward {
+      border-color: var(--accent2);
+      box-shadow: 0 0 0 2px rgba(74, 168, 199, .3);
+    }
+
+    .ward-card.has-urgent::before {
+      content: '⚠';
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      font-size: 14px;
+    }
+
+    .ward-card-name {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .my-badge {
+      font-size: 9.5px;
+      background: var(--accent2);
+      color: #fff;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .ward-card-stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 10px;
+    }
+
+    .ward-info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+
+    .ward-info-table td {
+      padding: 4px 0;
+      font-size: 12.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ward-info-table td:first-child {
+      color: var(--muted);
+    }
+
+    .ward-info-table td:last-child {
+      text-align: right;
+      font-weight: 600;
+    }
+
+    .ward-info-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .ward-highlight-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .ward-highlight-box {
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    .ward-highlight-box.presc {
+      background: #e7f1fb;
+      border: 1px solid #c5dcf4;
+    }
+
+    .ward-highlight-box.recommend {
+      background: #e9f7f0;
+      border: 1px solid #bfe5d2;
+    }
+
+    .ward-highlight-box.recommend.urgent {
+      background: #fdedec;
+      border: 1px solid #f3c3bf;
+    }
+
+    .wh-num {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--accent);
+    }
+
+    .ward-highlight-box.presc .wh-num {
+      color: var(--accent);
+    }
+
+    .ward-highlight-box.recommend .wh-num {
+      color: var(--success);
+    }
+
+    .ward-highlight-box.recommend.urgent .wh-num {
+      color: var(--danger);
+    }
+
+    .wh-unit {
+      font-size: 13px;
+      font-weight: 600;
+      margin-left: 2px;
+    }
+
+    .wh-label {
+      font-size: 10.5px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    .ward-stat-num {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .ward-stat-label {
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .ward-stat-danger {
+      color: var(--danger);
+    }
+
+    .ward-card .bar-bg {
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .ward-card .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .ward-card-foot {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .ward-card-chevron {
+      position: absolute;
+      bottom: 14px;
+      right: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      transition: transform .2s;
+    }
+
+    .ward-card.expanded .ward-card-chevron {
+      transform: rotate(180deg);
+      color: var(--accent);
+    }
+
+    /* ── 아코디언 패널 ── */
+    .accordion-panel {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: 14px;
+      margin: -4px 0 14px;
+      overflow: hidden;
+      animation: slideDown .25s ease;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        max-height: 0;
+      }
+
+      to {
+        opacity: 1;
+        max-height: 2000px;
+      }
+    }
+
+    .accordion-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .accordion-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .accordion-close {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .accordion-close:hover {
+      color: var(--text);
+    }
+
+    .accordion-body {
+      padding: 14px 20px 18px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      margin-bottom: 4px;
+    }
+
+    .tab-btn {
+      padding: 9px 16px;
+      font-size: 12.5px;
+      font-weight: 500;
+      border: none;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    table.pt-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    table.pt-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 7px 9px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11.5px;
+      background: var(--surface2);
+      position: sticky;
+      top: 0;
+    }
+
+    table.pt-table td {
+      padding: 9px 9px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: var(--surface2);
+    }
+
+    tr.unprescribed-target td {
+      background: #fdedec;
+    }
+
+    tr.prescribed-row td {
+      background: #e3f5eb;
+      color: #14532d;
+      font-weight: 600;
+    }
+
+    tr.prescribed-row td strong {
+      color: #14532d;
+    }
+
+    tr.not-target td {
+      opacity: .55;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 700;
+      border-radius: 4px;
+      padding: 2px 7px;
+      white-space: nowrap;
+    }
+
+    .tag.unprescribed {
+      background: #fce2e0;
+      color: #b8332b;
+    }
+
+    .tag.prescribed {
+      background: #d9f2e6;
+      color: #1e7a52;
+    }
+
+    .tag.insurance {
+      background: #fbead3;
+      color: #a86a14;
+    }
+
+    .tag.car {
+      background: #d9f0f4;
+      color: #1c7689;
+    }
+
+    .tag.none {
+      background: var(--surface2);
+      color: var(--muted);
+    }
+
+    .tag.recommend {
+      background: #fbead3;
+      color: #a86a14;
+      border: 1px solid #f0d2a0;
+    }
+
+    .tag.norecommend {
+      background: var(--surface2);
+      color: var(--muted);
+    }
+
+    .reason-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 11.5px;
+      width: 150px;
+      outline: none;
+      font-family: var(--font);
+    }
+
+    .reason-input:focus {
+      border-color: var(--warn);
+    }
+
+    .save-btn {
+      background: var(--warn);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: 10.5px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-left: 5px;
+    }
+
+    .unpresc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #fce2e0;
+      border: 1px solid #f3c3bf;
+      color: var(--danger);
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+
+    .table-scroll {
+      max-height: 440px;
+      overflow-y: auto;
+    }
+
+    .table-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    /* ── 전체 현황 (하단 collapsible) ── */
+    .global-toggle {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-top: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .global-toggle:hover {
+      border-color: var(--accent);
+    }
+
+    .global-toggle-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .global-chevron {
+      font-size: 13px;
+      color: var(--muted);
+      transition: transform .2s;
+    }
+
+    .global-chevron.open {
+      transform: rotate(180deg);
+    }
+
+    .global-section {
+      display: none;
+      margin-top: 14px;
+    }
+
+    .global-section.open {
+      display: block;
+    }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .kpi-sub {
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .kpi-card.accent {
+      border-color: var(--accent);
+    }
+
+    .kpi-card.warn {
+      border-color: var(--warn);
+    }
+
+    .kpi-card.danger {
+      border-color: var(--danger);
+    }
+
+    .kpi-card.success {
+      border-color: var(--success);
+    }
+
+    .kpi-section-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin: 14px 0 8px;
+      letter-spacing: .3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kpi-section-label .line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 16px;
+      margin: 14px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 14px 18px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+
+    .card-body {
+      padding: 14px 18px;
+    }
+
+    table.ward-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    table.ward-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 7px 9px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+
+    table.ward-table td {
+      padding: 9px 9px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    table.ward-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bar-bg2 {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      min-width: 50px;
+    }
+
+    .bar-fill2 {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .bar-pct {
+      font-size: 11px;
+      color: var(--muted);
+      min-width: 32px;
+      text-align: right;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      padding: 8px 0;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .search-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      outline: none;
+      width: 170px;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 50px 20px;
+      color: var(--muted);
+    }
+
+    .empty-state .icon {
+      font-size: 44px;
+      margin-bottom: 14px;
+    }
+
+    .empty-state h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      font-size: 13.5px;
+      line-height: 1.7;
+    }
+
+    .step-card {
+      display: inline-block;
+      text-align: left;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      max-width: 540px;
+    }
+
+    .step-card div {
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .step-num {
+      display: inline-flex;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 13px;
+      box-shadow: 0 4px 20px rgba(47, 127, 214, .18);
+      z-index: 200;
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all .25s;
+      max-width: 360px;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    @media (max-width: 900px) {
+      .kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .ward-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">🏥 병동별 처방 권고 대시보드</div>
+      <div class="date-badge-block">
+        <div class="date-badge-main" id="dateLabel">—</div>
+        <div class="date-badge-sub" id="dateLabelSub"></div>
+      </div>
+      <button class="upload-btn secondary" id="calendarBtn" onclick="openCalendarModal()" title="날짜별 데이터 보기"
+        style="display:none">📅 날짜 선택</button>
+      <div><span class="status-dot" id="statusDotEl"></span><span id="statusText"
+          style="font-size:12px;color:var(--muted)">기준표 필요</span></div>
+    </div>
+    <div class="upload-zone">
+      <button class="upload-btn ref" id="refUploadBtn" onclick="document.getElementById('refInput').click()"
+        style="display:none">① 기준표 업로드</button>
+      <input type="file" id="refInput" accept=".xlsx,.xls" onchange="handleRefUpload(event)">
+      <button class="upload-btn" id="dailyUploadBtn" onclick="onDailyUploadClick()">② 오늘자 재원·처방 업로드</button>
+      <input type="file" id="dailyInput" accept=".xlsx,.xls" multiple onchange="handleDailyUpload(event)">
+      <button class="upload-btn secondary" onclick="loadSampleData()">샘플 보기</button>
+      <button class="upload-btn secondary" id="adminToggleBtn" onclick="onAdminToggleClick()" title="관리자 모드"
+        style="display:none">🔒 관리자</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- 캘린더(날짜별 데이터 조회) 모달 -->
+    <div id="calendarOverlay"
+      style="display:none;position:fixed;inset:0;background:rgba(28,43,58,.45);z-index:300;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:14px;padding:22px;width:300px;box-shadow:0 8px 30px rgba(0,0,0,.2);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <button onclick="calendarPrevMonth()"
+            style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:2px 8px;">‹</button>
+          <div id="calendarMonthLabel" style="font-weight:700;font-size:14.5px;color:var(--text);"></div>
+          <button onclick="calendarNextMonth()"
+            style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:2px 8px;">›</button>
+        </div>
+        <div id="calendarGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:12px;"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;">🔵 데이터가 있는 날짜만 클릭할 수 있습니다</div>
+        <div style="margin-top:14px;text-align:right;">
+          <button class="upload-btn secondary" onclick="closeCalendarModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 관리자 PIN 입력 모달 -->
+    <div id="adminPinOverlay"
+      style="display:none;position:fixed;inset:0;background:rgba(28,43,58,.45);z-index:300;align-items:center;justify-content:center;">
+      <div
+        style="background:#fff;border-radius:14px;padding:28px 26px;width:280px;box-shadow:0 8px 30px rgba(0,0,0,.2);text-align:center;">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px;color:var(--text)">🔒 관리자 PIN 입력</div>
+        <input type="password" id="adminPinInput" maxlength="4" inputmode="numeric" placeholder="••••"
+          style="width:100%;text-align:center;font-size:22px;letter-spacing:8px;padding:10px;border:1px solid var(--border);border-radius:8px;outline:none;margin-bottom:12px;"
+          onkeydown="if(event.key==='Enter') submitAdminPin()">
+        <div style="display:flex;gap:8px">
+          <button class="upload-btn secondary" style="flex:1" onclick="closeAdminPinModal()">취소</button>
+          <button class="upload-btn" style="flex:1" onclick="submitAdminPin()">확인</button>
+        </div>
+        <div id="adminPinError" style="color:var(--danger);font-size:12px;margin-top:8px;display:none">PIN이 올바르지 않습니다
+        </div>
+      </div>
+    </div>
+
+    <div class="ref-banner" id="refBanner" style="display:none">
+      <span>📋 기준표 로드됨: EX871 <strong id="refExCount">0</strong>개 상병 · E6544 <strong id="refE6Count">0</strong>개
+        상병</span>
+      <button class="upload-btn secondary" style="padding:4px 10px;font-size:11px"
+        onclick="document.getElementById('refInput').click()">기준표 다시 업로드</button>
+    </div>
+
+    <div class="ref-banner" id="historyBanner" style="display:none; background:#fff4e0; border-color:#f0d28a;">
+      <span id="historyBannerText">📅 과거 데이터를 보고 있습니다</span>
+      <button class="upload-btn secondary"
+        style="padding:4px 10px;font-size:11px;background:var(--accent);color:#fff;border-color:var(--accent);"
+        onclick="exitHistoryView()">최신 데이터로 돌아가기</button>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="icon">📋</div>
+      <h3>먼저 기준표를 업로드해 주세요</h3>
+      <div class="step-card">
+        <div><span class="step-num">1</span><strong>기준표 업로드</strong> — EX871·E6544 상병코드/상병명 정의 파일 (최초 1회만)</div>
+        <div><span class="step-num">2</span><strong>오늘자 재원환자 + 처방 파일 업로드</strong> — 매일 14시, 2개 파일 동시 선택</div>
+        <div><span class="step-num">3</span>병동 카드를 클릭하면 그 병동의 처방 대상 환자 명단이 펼쳐집니다</div>
+      </div>
+      <br>
+      <button class="upload-btn" onclick="loadSampleData()">▶ 샘플 데이터로 미리보기</button>
+    </div>
+
+    <div id="dashContent" style="display:none">
+
+      <!-- 칭찬+독려 히어로 배너 -->
+      <div class="hero-banner" id="heroBanner">
+        <div class="hero-main">
+          <div class="hero-icon">🎉</div>
+          <div>
+            <div class="hero-text-big"><span id="hero-date-prefix">오늘</span> <span class="num"
+                id="hero-total-presc">—</span>명 처방했어요!</div>
+            <div class="hero-text-sub" id="hero-sub-text">EX871·E6544 처방 현황 — 모두 수고하셨습니다</div>
+          </div>
+        </div>
+        <div class="hero-divider"></div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="hero-rec-target">—</div>
+            <div class="hero-stat-label">권고대상</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-num warn" id="hero-rec-waiting">—</div>
+            <div class="hero-stat-label">아직 대기중</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="hero-rec-rate">—</div>
+            <div class="hero-stat-label">권고대상 처방률</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 내 병동 선택 -->
+      <div class="myward-bar">
+        <label>👩‍⚕️ 내 병동</label>
+        <select id="myWardSelect" onchange="onMyWardChange()">
+          <option value="">병동을 선택하세요</option>
+        </select>
+        <span class="myward-summary" id="myWardSummary"></span>
+      </div>
+
+      <!-- 병동 카드 그리드 (+ 클릭시 아코디언) -->
+      <div class="ward-grid" id="wardGrid"></div>
+
+      <!-- 전체 현황 (하단, 접힘) -->
+      <div class="global-toggle" onclick="toggleGlobal()">
+        <div class="global-toggle-title">🏥 병원 전체 현황 보기 (관리자용 통계)</div>
+        <div class="global-chevron" id="globalChevron">▼</div>
+      </div>
+      <div class="global-section" id="globalSection">
+
+        <div class="kpi-section-label">💉 금일 Hicardi 처방 현황 (조건 무관, 병원 전체)<div class="line"></div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-card success">
+            <div class="kpi-label">오늘 처방 완료(전체)</div>
+            <div class="kpi-value" id="kpi-today-total-presc" style="color:var(--success)">—</div>
+            <div class="kpi-sub">EX871+E6544 처방받은 모든 환자</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">EX871 처방</div>
+            <div class="kpi-value" id="kpi-today-ex871" style="color:var(--accent)">—</div>
+            <div class="kpi-sub">건수</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">E6544 처방</div>
+            <div class="kpi-value" id="kpi-today-e6544" style="color:var(--accent2)">—</div>
+            <div class="kpi-sub">건수</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">처방 중 권고대상 비율</div>
+            <div class="kpi-value" id="kpi-today-rec-ratio">—</div>
+            <div class="kpi-sub">전체 처방자 중 70세+·7일내·건보자보</div>
+          </div>
+        </div>
+
+        <div class="kpi-section-label">📊 전체 대상자 현황 (나이 무관)<div class="line"></div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-card accent">
+            <div class="kpi-label">전체 재원환자</div>
+            <div class="kpi-value" id="kpi-total" style="color:var(--accent)">—</div>
+            <div class="kpi-sub">현재 입원 중</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">상병 해당자(전체)</div>
+            <div class="kpi-value" id="kpi-all-target">—</div>
+            <div class="kpi-sub">EX871/E6544 매칭</div>
+          </div>
+          <div class="kpi-card success">
+            <div class="kpi-label">처방 완료(전체)</div>
+            <div class="kpi-value" id="kpi-all-prescribed" style="color:var(--success)">—</div>
+            <div class="kpi-sub">나이 무관</div>
+          </div>
+          <div class="kpi-card danger">
+            <div class="kpi-label">미처방(전체)</div>
+            <div class="kpi-value" id="kpi-all-unprescribed" style="color:var(--danger)">—</div>
+            <div class="kpi-sub">참고용</div>
+          </div>
+        </div>
+
+        <div class="kpi-section-label">⚠ 처방 권고 대상 (70세↑·7일내·건보/자보)<div class="line"></div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-card warn">
+            <div class="kpi-label">권고 대상자</div>
+            <div class="kpi-value" id="kpi-rec-target" style="color:var(--warn)">—</div>
+            <div class="kpi-sub">조건 충족 환자 수</div>
+          </div>
+          <div class="kpi-card danger">
+            <div class="kpi-label">⚠ 미처방(권고대상)</div>
+            <div class="kpi-value" id="kpi-rec-unprescribed" style="color:var(--danger)">—</div>
+            <div class="kpi-sub">즉시 처방 필요</div>
+          </div>
+          <div class="kpi-card success">
+            <div class="kpi-label">처방 완료(권고대상)</div>
+            <div class="kpi-value" id="kpi-rec-prescribed" style="color:var(--success)">—</div>
+            <div class="kpi-sub">권고대상 중</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">권고대상 처방률</div>
+            <div class="kpi-value" id="kpi-rec-rate">—</div>
+            <div class="kpi-sub">권고대상 기준</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">병동(병실)별 전체 대상자 현황</div><span style="font-size:12px;color:var(--muted)"
+                id="wardCount">—</span>
+            </div>
+            <div class="table-scroll">
+              <table class="ward-table">
+                <thead>
+                  <tr>
+                    <th>병동</th>
+                    <th>전체대상</th>
+                    <th>처방</th>
+                    <th>미처방</th>
+                    <th>처방률</th>
+                  </tr>
+                </thead>
+                <tbody id="wardTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">병동별 처방 현황 (전체 대상자 기준)</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-wrap"><canvas id="wardChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div class="card-title">⚙ 병동별 Hicardi 장비 보유 대비 가동률</div>
+            <span style="font-size:12px;color:var(--muted)">보유 200대 기준</span>
+          </div>
+          <div class="table-scroll">
+            <table class="ward-table">
+              <thead>
+                <tr>
+                  <th>병동</th>
+                  <th>보유수량</th>
+                  <th>처방중(가동)</th>
+                  <th>대상환자수</th>
+                  <th>가동률</th>
+                </tr>
+              </thead>
+              <tbody id="equipTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let state = {
+      ex871Ref: [], e6544Ref: [],
+      patients: [], prescriptions: [],
+      reasons: {}, myWard: '',
+      expandedWard: null, wardTab: 'all',
+      isAdmin: false,
+      uploadDate: '',
+      lastUpdatedAt: null,   // 업로드(실제 클릭) 시각 타임스탬프
+      viewingDate: null,     // 캘린더로 과거 날짜를 보고 있을 때 'YYYY-MM-DD'
+      liveSnapshot: null,    // 과거 날짜 보기 전, 최신 데이터를 임시 백업
+      bedCounts: {
+        '05병동': 29, '06병동': 20, '07병동': 50, '08병동': 53, '09병동': 52,
+        '10병동': 52, '11병동': 47, '12병동': 51, '13병동': 28,
+        'ICU': 23, 'ICU(A)': 9, 'A7병동': 43, 'A8병동': 44, 'A9병동': 42, 'A10병동': 27,
+      },
+    };
+    const ADMIN_PIN = '9780';
+    const PRESC_CODE_MAP = { 'L270098': 'EX871', 'L270097': 'E6544' };
+
+    // ═══════════════════════════════════════════════════════════
+    // Firebase Realtime Database 연동 (REST API, API Key 불필요)
+    // — Database 규칙에서 "/dashboard" 경로를 공개 read/write로 열어두었기 때문에
+    //   API Key/Project ID 같은 별도 설정 없이 URL 하나로 바로 동작합니다.
+    // ═══════════════════════════════════════════════════════════
+    const FIREBASE_DB_URL = 'https://ex871-e6544-hospital-dashboard-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+    // "2026.06.21" → "2026-06-21" (Firebase 키에는 '.' 사용 불가)
+    function dateKeyFromUploadDate(ud) {
+      if (!ud) return null;
+      const parts = ud.split('.').map(s => s.trim()).filter(Boolean);
+      if (parts.length < 3) return null;
+      const y = parts[0], m = String(parseInt(parts[1], 10)).padStart(2, '0'), d = String(parseInt(parts[2], 10)).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    async function syncToCloud() {
+      try {
+        const res = await fetch(`${FIREBASE_DB_URL}/dashboard.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reference: {
+              ex871Ref: state.ex871Ref,
+              e6544Ref: state.e6544Ref,
+              bedCounts: state.bedCounts,
+            },
+            daily: {
+              patients: state.patients,
+              prescriptions: state.prescriptions,
+              uploadDate: state.uploadDate,
+              reasons: state.reasons,
+              lastUpdatedAt: state.lastUpdatedAt,
+            },
+            updatedAt: Date.now(),
+          }),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        // 날짜별 히스토리 스냅샷도 함께 저장 (캘린더에서 과거 날짜 조회용)
+        // 과거 데이터를 보는 중에는(state.viewingDate) 절대 히스토리를 덮어쓰지 않음
+        const dateKey = dateKeyFromUploadDate(state.uploadDate);
+        if (dateKey && state.patients.length && !state.viewingDate) {
+          await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dateKey}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              patients: state.patients,
+              prescriptions: state.prescriptions,
+              reasons: state.reasons,
+              uploadDate: state.uploadDate,
+              lastUpdatedAt: state.lastUpdatedAt,
+            }),
+          });
+        }
+      } catch (e) {
+        console.warn('Firebase 동기화 실패:', e);
+        showToast('⚠ 클라우드 동기화 실패 — 네트워크 확인 필요 (이 기기에는 저장됨)');
+      }
+    }
+
+    async function loadFromCloud() {
+      try {
+        const res = await fetch(`${FIREBASE_DB_URL}/dashboard.json`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data) return { reachable: true, hasData: false };
+        if (data.reference) {
+          if (data.reference.ex871Ref) state.ex871Ref = data.reference.ex871Ref;
+          if (data.reference.e6544Ref) state.e6544Ref = data.reference.e6544Ref;
+          if (data.reference.bedCounts) state.bedCounts = data.reference.bedCounts;
+        }
+        if (data.daily) {
+          if (data.daily.patients) state.patients = data.daily.patients;
+          if (data.daily.prescriptions) state.prescriptions = data.daily.prescriptions;
+          if (data.daily.uploadDate !== undefined) state.uploadDate = data.daily.uploadDate;
+          if (data.daily.reasons) state.reasons = data.daily.reasons;
+          if (data.daily.lastUpdatedAt !== undefined) state.lastUpdatedAt = data.daily.lastUpdatedAt;
+        }
+        // 로컬에도 캐싱(오프라인 대비)
+        try {
+          localStorage.setItem('hosp_ex871_ref', JSON.stringify(state.ex871Ref));
+          localStorage.setItem('hosp_e6544_ref', JSON.stringify(state.e6544Ref));
+          localStorage.setItem('hosp_bed_counts', JSON.stringify(state.bedCounts));
+          localStorage.setItem('hosp_patients', JSON.stringify(state.patients));
+          localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
+          localStorage.setItem('hosp_upload_date', state.uploadDate);
+          localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+          localStorage.setItem('hosp_last_updated_at', state.lastUpdatedAt || '');
+        } catch (e) { }
+        return { reachable: true, hasData: !!(data.reference || data.daily) };
+      } catch (e) {
+        console.warn('Firebase 불러오기 실패, 로컬 캐시 사용:', e);
+        return { reachable: false, hasData: false };
+      }
+    }
+
+    // 다른 기기의 변경사항을 화면에 반영 (주기적 폴링으로 실시간에 가깝게 동기화)
+    let cloudPollTimer = null;
+    function startCloudPolling() {
+      if (cloudPollTimer) return;
+      cloudPollTimer = setInterval(async () => {
+        if (state.viewingDate) return; // 과거 데이터를 보는 중에는 최신 데이터로 화면을 덮어쓰지 않음
+        const before = JSON.stringify({ p: state.patients, r: state.reasons, u: state.uploadDate, ex: state.ex871Ref, e6: state.e6544Ref });
+        const result = await loadFromCloud();
+        if (!result.hasData) return;
+        const after = JSON.stringify({ p: state.patients, r: state.reasons, u: state.uploadDate, ex: state.ex871Ref, e6: state.e6544Ref });
+        if (before !== after) {
+          updateRefBanner();
+          if (state.patients.length > 0) initDashboard();
+        }
+      }, 20000); // 20초마다 클라우드 변경사항 확인
+    }
+
+    const EQUIPMENT_INVENTORY = {
+      '05병동': 10, '06병동': 5, '07병동': 15, '08병동': 15, '09병동': 15,
+      '10병동': 15, '11병동': 15, '12병동': 15, '13병동': 13,
+      'A7병동': 15, 'A8병동': 20, 'A9병동': 15, 'A10병동': 12, 'ICU': 20,
+    };
+    function inferWard(roomNo) {
+      const s = String(roomNo || '').trim().toUpperCase();
+      if (!s) return '미상';
+      if (s.startsWith('ICU')) return 'ICU';
+      const aMatch = s.match(/^A(\d+)/);
+      if (aMatch) {
+        const digits = aMatch[1];
+        const wardNum = (s.length - 1 === 4) ? digits.slice(0, 2) : digits.slice(0, 1);
+        return `A${parseInt(wardNum)}병동`;
+      }
+      const numMatch = s.match(/^(\d+)$/);
+      if (numMatch) {
+        const digits = numMatch[1];
+        const wardNum = digits.length === 4 ? digits.slice(0, 2) : digits.slice(0, 1);
+        return `${String(parseInt(wardNum)).padStart(2, '0')}병동`;
+      }
+      return s;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // localStorage: 기준표 + 내 병동 선택 캐싱
+    // ═══════════════════════════════════════════════════════════
+    function saveRefToStorage() {
+      try {
+        localStorage.setItem('hosp_ex871_ref', JSON.stringify(state.ex871Ref));
+        localStorage.setItem('hosp_e6544_ref', JSON.stringify(state.e6544Ref));
+        localStorage.setItem('hosp_bed_counts', JSON.stringify(state.bedCounts));
+      } catch (e) { }
+      syncToCloud();
+    }
+    function loadRefFromStorage() {
+      try {
+        const ex = localStorage.getItem('hosp_ex871_ref');
+        const e6 = localStorage.getItem('hosp_e6544_ref');
+        const beds = localStorage.getItem('hosp_bed_counts');
+        if (ex) state.ex871Ref = JSON.parse(ex);
+        if (e6) state.e6544Ref = JSON.parse(e6);
+        if (beds) state.bedCounts = JSON.parse(beds);
+        return state.ex871Ref.length > 0 || state.e6544Ref.length > 0;
+      } catch (e) { return false; }
+    }
+    function saveDailyDataToStorage() {
+      try {
+        localStorage.setItem('hosp_patients', JSON.stringify(state.patients));
+        localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
+        localStorage.setItem('hosp_upload_date', state.uploadDate);
+        localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+        localStorage.setItem('hosp_last_updated_at', state.lastUpdatedAt || '');
+      } catch (e) { }
+      syncToCloud();
+    }
+    function loadDailyDataFromStorage() {
+      try {
+        const pts = localStorage.getItem('hosp_patients');
+        const prescs = localStorage.getItem('hosp_prescriptions');
+        const udate = localStorage.getItem('hosp_upload_date');
+        const reasons = localStorage.getItem('hosp_reasons');
+        const lua = localStorage.getItem('hosp_last_updated_at');
+        if (pts) state.patients = JSON.parse(pts);
+        if (prescs) state.prescriptions = JSON.parse(prescs);
+        if (udate) state.uploadDate = udate;
+        if (reasons) state.reasons = JSON.parse(reasons);
+        if (lua) state.lastUpdatedAt = parseInt(lua, 10) || null;
+        return state.patients && state.patients.length > 0;
+      } catch (e) { return false; }
+    }
+    function saveMyWard() { try { localStorage.setItem('hosp_my_ward', state.myWard); } catch (e) { } }
+    function loadMyWard() { try { return localStorage.getItem('hosp_my_ward') || ''; } catch (e) { return ''; } }
+
+    // ═══════════════════════════════════════════════════════════
+    // 관리자 모드 (PIN 잠금) — sessionStorage: 탭 닫으면 자동 잠김, 새로고침은 유지
+    // ═══════════════════════════════════════════════════════════
+    function loadAdminState() {
+      try { return sessionStorage.getItem('hosp_is_admin') === '1'; } catch (e) { return false; }
+    }
+    function saveAdminState(val) {
+      try { sessionStorage.setItem('hosp_is_admin', val ? '1' : '0'); } catch (e) { }
+    }
+    function updateAdminUI() {
+      const show = state.isAdmin ? 'inline-block' : 'none';
+      document.getElementById('refUploadBtn').style.display = show;
+      // adminToggleBtn은 관리자 모드일 때만 노출(잠금용). 진입은 오직 "② 오늘자 업로드" 클릭을 통해서만 가능.
+      const btn = document.getElementById('adminToggleBtn');
+      btn.style.display = show;
+      btn.textContent = '🔓 관리자 모드 ON';
+    }
+    function onAdminToggleClick() {
+      // 이 버튼은 관리자 모드일 때만 보이며, 클릭 시 잠금(로그아웃)으로만 동작한다.
+      if (state.isAdmin) {
+        state.isAdmin = false;
+        saveAdminState(false);
+        updateAdminUI();
+        showToast('🔒 관리자 모드가 잠겼습니다');
+      }
+    }
+    // "② 오늘자 재원·처방 업로드" 버튼 클릭 — 관리자 모드 진입의 유일한 통로
+    let pendingAdminAction = null;
+    function onDailyUploadClick() {
+      if (state.isAdmin) {
+        document.getElementById('dailyInput').click();
+      } else {
+        pendingAdminAction = 'dailyUpload';
+        openAdminPinModal();
+      }
+    }
+    function openAdminPinModal() {
+      document.getElementById('adminPinOverlay').style.display = 'flex';
+      document.getElementById('adminPinError').style.display = 'none';
+      const input = document.getElementById('adminPinInput');
+      input.value = '';
+      setTimeout(() => input.focus(), 50);
+    }
+    function closeAdminPinModal() {
+      document.getElementById('adminPinOverlay').style.display = 'none';
+      pendingAdminAction = null;
+    }
+    function submitAdminPin() {
+      const val = document.getElementById('adminPinInput').value.trim();
+      if (val === ADMIN_PIN) {
+        state.isAdmin = true;
+        saveAdminState(true);
+        updateAdminUI();
+        document.getElementById('adminPinOverlay').style.display = 'none';
+        showToast('🔓 관리자 모드가 활성화되었습니다');
+        if (pendingAdminAction === 'dailyUpload') {
+          pendingAdminAction = null;
+          document.getElementById('dailyInput').click();
+        }
+      } else {
+        document.getElementById('adminPinError').style.display = 'block';
+        document.getElementById('adminPinInput').value = '';
+        document.getElementById('adminPinInput').focus();
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // REFERENCE UPLOAD
+    // ═══════════════════════════════════════════════════════════
+    function handleRefUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        let exList = [], e6List = [];
+        let bedMap = null;
+        wb.SheetNames.forEach(name => {
+          const data = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
+          if (!data.length) return;
+          const header = data[0].map(h => String(h).trim());
+          const upper = name.toUpperCase();
+
+          // EX871/E6544 상병 기준표
+          const codeIdx = header.findIndex(h => h.includes('상병코드'));
+          const nameIdx = header.findIndex(h => h.includes('상병명'));
+          if (codeIdx >= 0 && nameIdx >= 0) {
+            const rows = data.slice(1).filter(r => r[nameIdx])
+              .map(r => ({ code: String(r[codeIdx] || '').trim(), name: String(r[nameIdx]).trim() }));
+            if (upper.includes('EX871')) exList = dedupeByName(rows);
+            if (upper.includes('E6544')) e6List = dedupeByName(rows);
+          }
+
+          // 병상수 기준표 (시트명에 "병상" 포함, 컬럼: 병동/구분, 병상수)
+          const wardIdx = header.findIndex(h => h.includes('병동') || h.includes('구분'));
+          const bedIdx = header.findIndex(h => h.includes('병상수') || h.includes('병상') || h.includes('수'));
+          if (upper.includes('병상') && wardIdx >= 0 && bedIdx >= 0) {
+            bedMap = {};
+            data.slice(1).forEach(r => {
+              const wardName = String(r[wardIdx] || '').trim();
+              const bedCount = parseInt(r[bedIdx]);
+              if (wardName && bedCount) bedMap[wardName] = bedCount;
+            });
+          }
+        });
+        if (exList.length) state.ex871Ref = exList;
+        if (e6List.length) state.e6544Ref = e6List;
+        if (bedMap && Object.keys(bedMap).length) state.bedCounts = bedMap;
+        saveRefToStorage();
+        updateRefBanner();
+        const bedMsg = bedMap ? `, 병상수 ${Object.keys(bedMap).length}개 병동` : '';
+        showToast(`✅ 기준표 로드 완료 — EX871 ${state.ex871Ref.length}건, E6544 ${state.e6544Ref.length}건${bedMsg}`);
+        if (state.patients.length) initDashboard();
+      };
+      reader.readAsArrayBuffer(file);
+      event.target.value = '';
+    }
+    function dedupeByName(rows) {
+      const seen = new Set(); const out = [];
+      rows.forEach(r => { if (!seen.has(r.name)) { seen.add(r.name); out.push(r); } });
+      return out;
+    }
+    function updateRefBanner() {
+      const has = state.ex871Ref.length || state.e6544Ref.length;
+      document.getElementById('refBanner').style.display = has ? 'flex' : 'none';
+      document.getElementById('refExCount').textContent = state.ex871Ref.length;
+      document.getElementById('refE6Count').textContent = state.e6544Ref.length;
+      if (has) {
+        document.getElementById('statusDotEl').className = 'status-dot warn';
+        document.getElementById('statusText').textContent = '기준표 OK — 오늘자 데이터 대기중';
+        document.getElementById('statusText').style.color = 'var(--warn)';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // DAILY UPLOAD
+    // ═══════════════════════════════════════════════════════════
+    function handleDailyUpload(event) {
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
+      if (!state.ex871Ref.length && !state.e6544Ref.length) {
+        showToast('⚠ 먼저 ① 기준표를 업로드해 주세요');
+        event.target.value = ''; return;
+      }
+
+      let detectedDate = '';
+      for (const file of files) {
+        const match = file.name.match(/(\d{4,8})/);
+        if (match) {
+          const dateStr = match[1];
+          if (dateStr.length === 8) {
+            detectedDate = `${dateStr.slice(0, 4)}.${dateStr.slice(4, 6)}.${dateStr.slice(6, 8)}`;
+            break;
+          } else if (dateStr.length === 6) {
+            detectedDate = `20${dateStr.slice(0, 2)}.${dateStr.slice(2, 4)}.${dateStr.slice(4, 6)}`;
+            break;
+          } else if (dateStr.length === 4) {
+            const year = new Date().getFullYear();
+            detectedDate = `${year}.${dateStr.slice(0, 2)}.${dateStr.slice(2, 4)}`;
+            break;
+          }
+        }
+      }
+      if (detectedDate) {
+        state.uploadDate = detectedDate;
+      } else {
+        state.uploadDate = '';
+      }
+      state.lastUpdatedAt = Date.now();
+      state.viewingDate = null;
+      state.liveSnapshot = null;
+
+      let pending = files.length;
+      let newPatients = null, newPrescriptions = null;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          wb.SheetNames.forEach(name => {
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
+            if (!data.length) return;
+            const header = data[0].map(h => String(h).trim());
+            if (header.some(h => h.includes('상병')) && header.some(h => h.includes('재원일수'))) {
+              newPatients = parsePatientSheet(data, header);
+            }
+            if (header.some(h => h.includes('수가코드'))) {
+              newPrescriptions = parsePrescriptionSheet(data, header);
+            }
+          });
+          pending--;
+          if (pending === 0) {
+            if (newPatients) state.patients = newPatients;
+            if (newPrescriptions) state.prescriptions = newPrescriptions;
+            saveDailyDataToStorage();
+            initDashboard();
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+      event.target.value = '';
+    }
+
+    function colIdx(header, keywords) {
+      for (const k of keywords) { const idx = header.findIndex(h => h.includes(k)); if (idx >= 0) return idx; }
+      return -1;
+    }
+
+    function parsePatientSheet(rows, header) {
+      const idIdx = colIdx(header, ['등록번호', '환자번호']);
+      const nameIdx = colIdx(header, ['성명', '환자명']);
+      const saIdx = colIdx(header, ['S/A', 'SA']);
+      const wardIdx = colIdx(header, ['병실', '병동']);
+      const deptIdx = colIdx(header, ['진료과']);
+      const docIdx = colIdx(header, ['주치의']);
+      const diseaseIdx = colIdx(header, ['상병']);
+      const insIdx = colIdx(header, ['급종']);
+      const daysIdx = colIdx(header, ['재원일수']);
+      const visitIdx = colIdx(header, ['입원횟수']);
+
+      return rows.slice(1).filter(r => r[idIdx]).map(r => {
+        const sa = String(r[saIdx] || '').trim();
+        const [sex, ageStr] = sa.split('/');
+        const age = parseInt(ageStr) || 0;
+        const insRaw = String(r[insIdx] || '').trim();
+        return {
+          id: String(r[idIdx]).trim(), name: String(r[nameIdx] || '').trim(),
+          sa, sex: sex || '', age,
+          room: String(r[wardIdx] || '').trim(), ward: inferWard(r[wardIdx]), dept: String(r[deptIdx] || '').trim(),
+          doctor: String(r[docIdx] || '').trim(), disease: String(r[diseaseIdx] || '').trim(),
+          insType: insRaw, insSimple: simplifyInsurance(insRaw),
+          days: parseInt(r[daysIdx]) || 0, visitCount: parseInt(r[visitIdx]) || 0,
+        };
+      });
+    }
+    function simplifyInsurance(raw) {
+      if (raw.includes('건강보험')) return '건강보험';
+      if (raw.includes('자보') || raw.includes('자동차')) return '자보';
+      if (raw.includes('의료급여')) return '의료급여';
+      if (raw.includes('산재')) return '산재';
+      return raw || '기타';
+    }
+    function parsePrescriptionSheet(rows, header) {
+      const idIdx = colIdx(header, ['환자번호', '등록번호']);
+      const codeIdx = colIdx(header, ['수가코드']);
+      const actCodeIdx = colIdx(header, ['행위코드']);
+      return rows.slice(1).filter(r => r[idIdx] && r[codeIdx])
+        .map(r => {
+          let type = null;
+          if (actCodeIdx >= 0) {
+            const act = String(r[actCodeIdx] || '').trim().toUpperCase();
+            if (act === 'EX871' || act === 'E6544') type = act;
+          }
+          if (!type) type = PRESC_CODE_MAP[String(r[codeIdx]).trim()] || null;
+          return { patientId: String(r[idIdx]).trim(), code: String(r[codeIdx]).trim(), type };
+        })
+        .filter(p => p.type);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SAMPLE DATA
+    // ═══════════════════════════════════════════════════════════
+    function loadSampleData() {
+      state.uploadDate = '';
+      state.lastUpdatedAt = null;
+      state.viewingDate = null;
+      state.liveSnapshot = null;
+      state.ex871Ref = [
+        { code: 'I509', name: '상세불명의 심부전' }, { code: 'I639', name: '기타 뇌경색증' },
+        { code: 'J189', name: '상세불명의 폐렴' }, { code: 'K746', name: '간경변증NOS' },
+      ];
+      state.e6544Ref = [
+        { code: 'I10', name: '본태성(원발성) 고혈압' }, { code: 'A099', name: '상세불명 기원의 위장염 및 대장염' },
+        { code: 'N390', name: '요로감염 NOS' },
+      ];
+      saveRefToStorage();
+
+      const wards = ['05병동', '06병동', '07병동', '08병동', '09병동', '10병동', '11병동', '12병동', '13병동', 'A7병동', 'A8병동', 'A9병동', 'A10병동', 'ICU'];
+      const depts = ['IM', 'GS', 'OS', 'NS', 'CS', 'CN'];
+      const insTypes = ['건강보험', '건강보험', '자보', '건강보험', '의료급여'];
+      const names = ['김철수', '이영희', '박민준', '최수진', '정대현', '홍길동', '강소희', '윤태양', '임채원', '서지현',
+        '오민수', '배준혁', '신나연', '류세진', '한지원', '남도현', '황민경', '조태준', '전민서', '문하준'];
+      const matchDiseases = [...state.ex871Ref, ...state.e6544Ref];
+      const otherDiseases = [{ name: '단순 타박상' }, { name: '일상적 흉부X-선검사' }, { name: '급성 충수염' }];
+
+      state.patients = Array.from({ length: 120 }, (_, i) => {
+        const age = 20 + Math.floor(Math.random() * 70);
+        const sex = Math.random() > 0.5 ? 'M' : 'F';
+        const useMatch = Math.random() > 0.3;
+        const dz = useMatch ? matchDiseases[Math.floor(Math.random() * matchDiseases.length)] : otherDiseases[Math.floor(Math.random() * otherDiseases.length)];
+        return {
+          id: String(100000 + i), name: names[i % names.length], sa: `${sex}/${age}`, sex, age,
+          ward: wards[Math.floor(Math.random() * wards.length)], dept: depts[Math.floor(Math.random() * depts.length)],
+          doctor: '김의사', disease: dz.name,
+          insType: insTypes[Math.floor(Math.random() * insTypes.length)],
+          insSimple: insTypes[Math.floor(Math.random() * insTypes.length)],
+          days: 1 + Math.floor(Math.random() * 15), visitCount: 1,
+        };
+      });
+
+      state.prescriptions = [];
+      state.patients.forEach(p => {
+        const isEx = state.ex871Ref.some(r => r.name === p.disease);
+        const isE6 = state.e6544Ref.some(r => r.name === p.disease);
+        if (isEx && Math.random() > 0.4) state.prescriptions.push({ patientId: p.id, code: 'L270098', type: 'EX871' });
+        if (isE6 && Math.random() > 0.4) state.prescriptions.push({ patientId: p.id, code: 'L270097', type: 'E6544' });
+      });
+
+      updateRefBanner();
+      saveDailyDataToStorage();
+      initDashboard();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FILTER LOGIC
+    // ═══════════════════════════════════════════════════════════
+    function matchDisease(patientDisease, refList) {
+      if (!patientDisease || !refList.length) return false;
+      return refList.some(r => patientDisease.includes(r.name) || r.name.includes(patientDisease));
+    }
+
+    function getAllMatchedPatients() {
+      // 실제로 EX871/E6544 처방을 받은 환자 ID (상병/나이 조건과 무관하게 항상 화면에 포함되어야 함)
+      const ex871PrescIds = new Set(state.prescriptions.filter(x => x.type === 'EX871').map(x => x.patientId));
+      const e6544PrescIds = new Set(state.prescriptions.filter(x => x.type === 'E6544').map(x => x.patientId));
+
+      return state.patients.filter(p => {
+        const isEx = matchDisease(p.disease, state.ex871Ref);
+        const isE6 = matchDisease(p.disease, state.e6544Ref);
+        const isElderlyCovered = p.age >= 70 && p.days <= 7 && ['건강보험', '자보'].includes(p.insSimple);
+        const wasPrescribed = ex871PrescIds.has(p.id) || e6544PrescIds.has(p.id);
+        return isEx || isE6 || (!isEx && isElderlyCovered) || wasPrescribed;
+      }).map(p => {
+        const isEx871Target = matchDisease(p.disease, state.ex871Ref);
+        const diseaseE6544Target = matchDisease(p.disease, state.e6544Ref);
+        const meetsAgeInsDays = p.age >= 70 && p.days <= 7 && ['건강보험', '자보'].includes(p.insSimple);
+        const e6544ByAgeRule = !isEx871Target && meetsAgeInsDays;
+        const isE6544Target = diseaseE6544Target || e6544ByAgeRule;
+        const isRecommended = (isEx871Target || diseaseE6544Target) ? meetsAgeInsDays : e6544ByAgeRule;
+        return { ...p, isEx871Target, isE6544Target, isRecommended, e6544ByAgeRule };
+      });
+    }
+
+    function getPrescriptionStatus(p) {
+      const ex871Presc = state.prescriptions.some(x => x.patientId === p.id && x.type === 'EX871');
+      const e6544Presc = state.prescriptions.some(x => x.patientId === p.id && x.type === 'E6544');
+      return { ex871Presc, e6544Presc };
+    }
+    function isPrescribed(p) {
+      const { ex871Presc, e6544Presc } = getPrescriptionStatus(p);
+      // 실제로 EX871이든 E6544든 하나라도 Hicardi 처방을 받았으면 처방완료로 인정.
+      // (어떤 상병으로 권고됐는지와 무관하게, 모니터링 처방 자체가 이미 나간 것이 핵심)
+      return ex871Presc || e6544Presc;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // INIT DASHBOARD
+    // ═══════════════════════════════════════════════════════════
+    let wardChartInst = null;
+
+    function initDashboard() {
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('dashContent').style.display = 'block';
+      updateRefBanner();
+
+      if (state.uploadDate) {
+        document.getElementById('dateLabel').textContent = `${state.uploadDate} 기준`;
+      } else {
+        const now = new Date();
+        document.getElementById('dateLabel').textContent =
+          `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} 기준`;
+      }
+      const subEl = document.getElementById('dateLabelSub');
+      if (state.lastUpdatedAt) {
+        const d = new Date(state.lastUpdatedAt);
+        subEl.textContent = `최종 업데이트 ${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      } else {
+        subEl.textContent = '';
+      }
+
+      document.getElementById('calendarBtn').style.display = 'inline-block';
+
+      const historyBanner = document.getElementById('historyBanner');
+      if (state.viewingDate) {
+        historyBanner.style.display = 'flex';
+        document.getElementById('historyBannerText').textContent = `📅 과거 데이터를 보고 있습니다 — ${state.uploadDate} 기준 (실시간 데이터 아님, 수정 불가)`;
+      } else {
+        historyBanner.style.display = 'none';
+      }
+
+      document.getElementById('statusDotEl').className = 'status-dot live';
+      document.getElementById('statusText').textContent = state.viewingDate ? '과거 데이터 보기 중' : '오늘자 데이터 로드됨';
+      document.getElementById('statusText').style.color = state.viewingDate ? 'var(--warn)' : 'var(--success)';
+
+      state.myWard = loadMyWard();
+
+      renderHeroBanner();
+      renderWardGrid();
+      renderGlobalStats();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 칭찬+독려 히어로 배너
+    // ═══════════════════════════════════════════════════════════
+    function formatKoreanMonthDay(uploadDateStr) {
+      // "2026.06.21" → "6월 21일"
+      if (!uploadDateStr) return null;
+      const parts = uploadDateStr.split('.').map(s => s.trim()).filter(Boolean);
+      if (parts.length < 3) return null;
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      if (!month || !day) return null;
+      return `${month}월 ${day}일`;
+    }
+    function renderHeroBanner() {
+      const allTargets = getAllMatchedPatients();
+      const recTargets = allTargets.filter(p => p.isRecommended);
+      const recWaiting = recTargets.filter(p => !isPrescribed(p));
+      const recRate = recTargets.length ? Math.round((recTargets.length - recWaiting.length) / recTargets.length * 100) : 0;
+
+      const ex871PrescIds = new Set(state.prescriptions.filter(x => x.type === 'EX871').map(x => x.patientId));
+      const e6544PrescIds = new Set(state.prescriptions.filter(x => x.type === 'E6544').map(x => x.patientId));
+      const totalPrescCount = new Set([...ex871PrescIds, ...e6544PrescIds]).size;
+
+      const koDate = formatKoreanMonthDay(state.uploadDate);
+      document.getElementById('hero-date-prefix').textContent = koDate ? `${koDate}에` : '오늘';
+      document.getElementById('hero-total-presc').textContent = totalPrescCount;
+      document.getElementById('hero-rec-target').textContent = recTargets.length;
+      document.getElementById('hero-rec-waiting').textContent = recWaiting.length;
+      document.getElementById('hero-rec-rate').textContent = recRate + '%';
+
+      const subText = recWaiting.length > 0
+        ? `현재 권고대상 ${recTargets.length}명 중 ${recWaiting.length}명이 아직 처방 대기중입니다. 여러분의 노고로 환자 안전을 지킬 수 있습니다 🙏`
+        : `권고대상 환자 전원 처방이 완료되었습니다. 여러분의 노고로 환자 안전을 지켜냈습니다 🙏`;
+      document.getElementById('hero-sub-text').textContent = subText;
+
+      const icon = recWaiting.length === 0 ? '🏆' : (recRate >= 70 ? '🎉' : '📣');
+      document.querySelector('.hero-icon').textContent = icon;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 병동 카드 그리드 렌더링
+    // ═══════════════════════════════════════════════════════════
+    function getWardSummaries() {
+      const allTargets = getAllMatchedPatients();
+      const wards = {};
+      allTargets.forEach(p => {
+        if (!wards[p.ward]) wards[p.ward] = { total: 0, recTotal: 0, recUnprescribed: 0, recPrescribed: 0, totalPrescribedAny: 0, patientCount: 0, prescRowCount: 0 };
+        wards[p.ward].total++;
+        if (p.isRecommended) {
+          wards[p.ward].recTotal++;
+          isPrescribed(p) ? wards[p.ward].recPrescribed++ : wards[p.ward].recUnprescribed++;
+        }
+      });
+
+      // 조건(나이/보험/재원일수) 무관 — 병동 내 실제 EX871/E6544 처방받은 모든 환자 수
+      const ex871PrescIds = new Set(state.prescriptions.filter(x => x.type === 'EX871').map(x => x.patientId));
+      const e6544PrescIds = new Set(state.prescriptions.filter(x => x.type === 'E6544').map(x => x.patientId));
+      const allPrescIds = new Set([...ex871PrescIds, ...e6544PrescIds]);
+
+      function ensureWard(w) {
+        if (!wards[w]) wards[w] = { total: 0, recTotal: 0, recUnprescribed: 0, recPrescribed: 0, totalPrescribedAny: 0, patientCount: 0, prescRowCount: 0 };
+        return wards[w];
+      }
+
+      state.patients.forEach(p => {
+        if (allPrescIds.has(p.id)) {
+          ensureWard(p.ward).totalPrescribedAny += 1;
+        }
+        // 재원환자수: 병동별 전체 입원중인 환자 수 (상병/나이 무관)
+        ensureWard(p.ward).patientCount += 1;
+      });
+
+      // 금일 하이카디 처방 건수(중복 포함, 엑셀 행 수 기준)
+      const patientWardMap = new Map(state.patients.map(p => [p.id, p.ward]));
+      state.prescriptions.forEach(x => {
+        const w = patientWardMap.get(x.patientId);
+        if (w) ensureWard(w).prescRowCount += 1;
+      });
+
+      return wards;
+    }
+
+    function renderWardGrid() {
+      const wards = getWardSummaries();
+      const wardKeys = Object.keys(wards).sort();
+
+      // 내 병동 드롭다운 채우기
+      const sel = document.getElementById('myWardSelect');
+      const prevVal = state.myWard;
+      sel.innerHTML = '<option value="">병동을 선택하세요</option>';
+      wardKeys.forEach(w => sel.innerHTML += `<option value="${w}">${w}</option>`);
+      sel.value = prevVal;
+
+      const grid = document.getElementById('wardGrid');
+      grid.innerHTML = '';
+
+      // 정렬: 내 병동 먼저, 그다음 미처방 많은 순
+      const sortedWards = [...wardKeys].sort((a, b) => {
+        if (a === state.myWard) return -1;
+        if (b === state.myWard) return 1;
+        return wards[b].recUnprescribed - wards[a].recUnprescribed;
+      });
+
+      sortedWards.forEach(w => {
+        const d = wards[w];
+        const bedCount = state.bedCounts[w] || 0;
+        const isMy = w === state.myWard;
+        const isExpanded = state.expandedWard === w;
+        const hasUrgent = d.recUnprescribed > 0;
+
+        const card = document.createElement('div');
+        card.className = `ward-card ${isMy ? 'is-my-ward' : ''} ${isExpanded ? 'expanded' : ''} ${hasUrgent ? 'has-urgent' : ''}`;
+        card.onclick = () => toggleWardAccordion(w);
+        card.innerHTML = `
+      <div class="ward-card-name">${w} ${isMy ? '<span class="my-badge">내병동</span>' : ''}</div>
+      <table class="ward-info-table">
+        <tr><td>병상수</td><td>${bedCount}병상</td></tr>
+        <tr><td>재원환자수</td><td>${d.patientCount || 0}명</td></tr>
+      </table>
+      <div class="ward-highlight-row">
+        <div class="ward-highlight-box presc">
+          <div class="wh-num">${d.prescRowCount || 0}<span class="wh-unit">건</span></div>
+          <div class="wh-label">금일 하이카디처방 수</div>
+        </div>
+        <div class="ward-highlight-box recommend ${hasUrgent ? 'urgent' : ''}">
+          <div class="wh-num">${d.recUnprescribed}<span class="wh-unit">명</span></div>
+          <div class="wh-label">추가 권고 대상자</div>
+        </div>
+      </div>
+      <div class="ward-card-chevron">▼</div>
+    `;
+        grid.appendChild(card);
+
+        if (isExpanded) {
+          const panel = document.createElement('div');
+          panel.className = 'accordion-panel';
+          panel.id = 'accordionPanel';
+          grid.appendChild(panel);
+          renderWardAccordion(w, panel);
+        }
+      });
+
+      // 내 병동 요약 문구
+      if (state.myWard && wards[state.myWard]) {
+        const d = wards[state.myWard];
+        document.getElementById('myWardSummary').innerHTML =
+          d.recUnprescribed > 0
+            ? `현재 ${state.myWard}에 <strong>미처방 ${d.recUnprescribed}명</strong> 있습니다`
+            : `${state.myWard} 미처방 환자 없음 ✅`;
+      } else {
+        document.getElementById('myWardSummary').textContent = '';
+      }
+
+      showToast(`✅ 데이터 로드 완료 — 전체 ${wardKeys.length}개 병동`);
+    }
+
+    function onMyWardChange() {
+      state.myWard = document.getElementById('myWardSelect').value;
+      saveMyWard();
+      renderWardGrid();
+    }
+
+    function toggleWardAccordion(ward) {
+      state.expandedWard = (state.expandedWard === ward) ? null : ward;
+      state.wardTab = 'all';
+      renderWardGrid();
+      if (state.expandedWard) {
+        setTimeout(() => {
+          const panel = document.getElementById('accordionPanel');
+          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 아코디언 내부: 해당 병동 환자 테이블
+    // ═══════════════════════════════════════════════════════════
+    function renderWardAccordion(ward, panel) {
+      const allTargets = getAllMatchedPatients().filter(p => p.ward === ward);
+      panel.innerHTML = `
+    <div class="accordion-header">
+      <div class="accordion-title">${ward} 처방 대상 환자 명단</div>
+      <button class="accordion-close" onclick="event.stopPropagation(); toggleWardAccordion('${ward}')">✕ 닫기</button>
+    </div>
+    <div class="accordion-body">
+      <div class="tabs">
+        <button class="tab-btn ${state.wardTab === 'all' ? 'active' : ''}" onclick="setWardTab('all')">전체</button>
+        <button class="tab-btn ${state.wardTab === 'recommend' ? 'active' : ''}" onclick="setWardTab('recommend')">⚠ 권고대상만</button>
+        <button class="tab-btn ${state.wardTab === 'unprescribed' ? 'active' : ''}" onclick="setWardTab('unprescribed')">🔴 권고대상 中 미처방</button>
+        <button class="tab-btn ${state.wardTab === 'prescribed-any' ? 'active' : ''}" onclick="setWardTab('prescribed-any')">✅ 처방완료 전체(조건무관)</button>
+      </div>
+      <div class="filter-row">
+        <input class="search-input" id="ptSearch-${ward}" placeholder="환자명 / 등록번호 검색" oninput="renderWardPatientTable('${ward}')">
+      </div>
+      <div class="table-scroll">
+        <table class="pt-table">
+          <thead>
+            <tr><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>재원일수</th><th>급종</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
+          </thead>
+          <tbody id="ptTableBody-${ward}"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+      renderWardPatientTable(ward);
+    }
+
+    function setWardTab(tab) {
+      state.wardTab = tab;
+      const ward = state.expandedWard;
+      if (!ward) return;
+      document.querySelectorAll('.accordion-body .tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderWardPatientTable(ward);
+    }
+
+    // 병동 내 EX871/E6544 처방받은 모든 환자 (나이/보험/재원일수 조건 무관)
+    function getWardPrescribedAny(ward) {
+      const ex871PrescIds = new Set(state.prescriptions.filter(x => x.type === 'EX871').map(x => x.patientId));
+      const e6544PrescIds = new Set(state.prescriptions.filter(x => x.type === 'E6544').map(x => x.patientId));
+      return state.patients
+        .filter(p => p.ward === ward && (ex871PrescIds.has(p.id) || e6544PrescIds.has(p.id)))
+        .map(p => ({
+          ...p,
+          gotEx871: ex871PrescIds.has(p.id),
+          gotE6544: e6544PrescIds.has(p.id),
+          meetsRecCond: p.age >= 70 && p.days <= 7 && ['건강보험', '자보'].includes(p.insSimple),
+        }));
+    }
+
+    function renderWardPatientTable(ward) {
+      const tab = state.wardTab;
+
+      // "처방완료 전체(조건무관)" 탭은 별도 데이터 소스 사용
+      if (tab === 'prescribed-any') {
+        renderWardPrescribedAnyTable(ward);
+        return;
+      }
+
+      let pts = getAllMatchedPatients().filter(p => p.ward === ward);
+      const searchEl = document.getElementById(`ptSearch-${ward}`);
+      const search = searchEl ? searchEl.value.toLowerCase() : '';
+
+      if (tab === 'recommend') pts = pts.filter(p => p.isRecommended);
+      if (tab === 'unprescribed') pts = pts.filter(p => p.isRecommended && !isPrescribed(p));
+      if (search) pts = pts.filter(p => p.name.toLowerCase().includes(search) || p.id.includes(search));
+
+      pts.sort((a, b) => {
+        // 1순위: 추가 권고 대상자(미처방+권고대상) 먼저, 2순위: 금일 처방완료 환자, 3순위: 권고대상 아닌 환자
+        const score = p => (p.isRecommended && !isPrescribed(p)) ? 0 : (isPrescribed(p) ? 1 : 2);
+        return score(a) - score(b);
+      });
+
+      const tbody = document.getElementById(`ptTableBody-${ward}`);
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (!pts.length) {
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">해당 조건의 환자가 없습니다</td></tr>`;
+        return;
+      }
+
+      pts.forEach(p => {
+        const { ex871Presc, e6544Presc } = getPrescriptionStatus(p);
+        const unpresc = !isPrescribed(p);
+        const rowClass = (p.isRecommended && unpresc) ? 'unprescribed-target' : (isPrescribed(p) ? 'prescribed-row' : (!p.isRecommended ? 'not-target' : ''));
+        const insTag = p.insSimple === '자보' ? `<span class="tag car">자보</span>` : (p.insSimple === '건강보험' ? `<span class="tag insurance">건강보험</span>` : `<span class="tag none">${p.insSimple}</span>`);
+        const savedReason = state.reasons[p.id] || '';
+
+        // 실제 처방 여부를 항상 우선 표시. 권고대상이 아니어도 처방받았으면 그 사실을 보여줌.
+        const exCell = ex871Presc
+          ? '<span class="tag prescribed">처방완료</span>'
+          : (p.isEx871Target ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>');
+        const e6Cell = e6544Presc
+          ? '<span class="tag prescribed">처방완료</span>'
+          : (p.isE6544Target ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>');
+        const recCell = p.isRecommended
+          ? (p.e6544ByAgeRule ? '<span class="tag recommend">✅ 연령기준</span>' : '<span class="tag recommend">✅ 권고</span>')
+          : '<span class="tag norecommend">—</span>';
+
+        const showReasonInput = p.isRecommended && unpresc;
+
+        tbody.innerHTML += `<tr class="${rowClass}">
+      <td>${p.id}</td>
+      <td><strong>${p.name}</strong>${showReasonInput ? '<br><span class="unpresc-badge">⚠ 처방필요</span>' : ''}</td>
+      <td>${p.sa}</td>
+      <td>${p.dept}</td>
+      <td style="color:${p.days <= 3 ? 'var(--success)' : 'inherit'}">${p.days}일</td>
+      <td>${insTag}</td>
+      <td style="max-width:200px"><span style="font-size:11.5px">${p.disease}</span></td>
+      <td>${recCell}</td>
+      <td>${exCell}</td>
+      <td>${e6Cell}</td>
+      <td>
+        ${showReasonInput ? `
+          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${state.viewingDate ? 'disabled' : ''}>
+          <button class="save-btn" onclick="saveReason('${p.id}')" ${state.viewingDate ? 'disabled' : ''}>저장</button>
+        `: (savedReason ? `<span style="font-size:11px;color:var(--muted)">${savedReason}</span>` : '<span style="color:var(--muted);font-size:11px">—</span>')}
+      </td>
+    </tr>`;
+      });
+    }
+
+    // "처방완료 전체(조건무관)" 탭 렌더링 — 나이/보험/재원일수와 무관하게 EX871/E6544 처방받은 모든 환자
+    function renderWardPrescribedAnyTable(ward) {
+      let pts = getWardPrescribedAny(ward);
+      const searchEl = document.getElementById(`ptSearch-${ward}`);
+      const search = searchEl ? searchEl.value.toLowerCase() : '';
+      if (search) pts = pts.filter(p => p.name.toLowerCase().includes(search) || p.id.includes(search));
+
+      // 권고대상 조건 충족 환자 먼저
+      pts.sort((a, b) => (b.meetsRecCond ? 1 : 0) - (a.meetsRecCond ? 1 : 0));
+
+      const tbody = document.getElementById(`ptTableBody-${ward}`);
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (!pts.length) {
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">처방받은 환자가 없습니다</td></tr>`;
+        return;
+      }
+
+      pts.forEach(p => {
+        const insTag = p.insSimple === '자보' ? `<span class="tag car">자보</span>` : (p.insSimple === '건강보험' ? `<span class="tag insurance">건강보험</span>` : `<span class="tag none">${p.insSimple}</span>`);
+        const exCell = p.gotEx871 ? '<span class="tag prescribed">처방완료</span>' : '<span class="tag none">—</span>';
+        const e6Cell = p.gotE6544 ? '<span class="tag prescribed">처방완료</span>' : '<span class="tag none">—</span>';
+        const recCell = p.meetsRecCond ? '<span class="tag recommend">✅ 권고조건 충족</span>' : '<span class="tag norecommend">조건 외(나이/보험/재원일수)</span>';
+
+        tbody.innerHTML += `<tr class="prescribed-row">
+      <td>${p.id}</td>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.sa}</td>
+      <td>${p.dept}</td>
+      <td>${p.days}일</td>
+      <td>${insTag}</td>
+      <td style="max-width:200px"><span style="font-size:11.5px">${p.disease}</span></td>
+      <td>${recCell}</td>
+      <td>${exCell}</td>
+      <td>${e6Cell}</td>
+      <td><span style="color:var(--muted);font-size:11px">—</span></td>
+    </tr>`;
+      });
+    }
+
+    function saveReason(id) {
+      if (state.viewingDate) {
+        showToast('⚠ 과거 데이터는 수정할 수 없습니다. 먼저 "최신 데이터로 돌아가기"를 눌러주세요');
+        return;
+      }
+      const val = document.getElementById(`reason-${id}`)?.value || '';
+      state.reasons[id] = val;
+      try {
+        localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+      } catch (e) { }
+      syncToCloud();
+      showToast('💾 미처방 사유 저장 완료');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 캘린더 (날짜별 데이터 조회)
+    // ═══════════════════════════════════════════════════════════
+    let calendarViewYear, calendarViewMonth; // calendarViewMonth는 0-indexed
+    let calendarAvailableDates = new Set();
+
+    async function openCalendarModal() {
+      document.getElementById('calendarOverlay').style.display = 'flex';
+      let base;
+      if (state.viewingDate) {
+        base = new Date(state.viewingDate);
+      } else {
+        const k = dateKeyFromUploadDate(state.uploadDate);
+        base = k ? new Date(k) : new Date();
+      }
+      calendarViewYear = base.getFullYear();
+      calendarViewMonth = base.getMonth();
+      document.getElementById('calendarGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:14px 0;">불러오는 중...</div>';
+      await loadCalendarAvailableDates();
+      renderCalendarGrid();
+    }
+    function closeCalendarModal() {
+      document.getElementById('calendarOverlay').style.display = 'none';
+    }
+    async function loadCalendarAvailableDates() {
+      try {
+        const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        calendarAvailableDates = new Set(data ? Object.keys(data) : []);
+      } catch (e) {
+        console.warn('캘린더 날짜 목록 불러오기 실패', e);
+        calendarAvailableDates = new Set();
+      }
+    }
+    function calendarPrevMonth() {
+      calendarViewMonth--;
+      if (calendarViewMonth < 0) { calendarViewMonth = 11; calendarViewYear--; }
+      renderCalendarGrid();
+    }
+    function calendarNextMonth() {
+      calendarViewMonth++;
+      if (calendarViewMonth > 11) { calendarViewMonth = 0; calendarViewYear++; }
+      renderCalendarGrid();
+    }
+    function renderCalendarGrid() {
+      document.getElementById('calendarMonthLabel').textContent = `${calendarViewYear}년 ${calendarViewMonth + 1}월`;
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = '';
+      const dow = ['일', '월', '화', '수', '목', '금', '토'];
+      dow.forEach(d => {
+        grid.innerHTML += `<div style="text-align:center;color:var(--muted);font-weight:600;padding:4px 0;">${d}</div>`;
+      });
+      const firstDay = new Date(calendarViewYear, calendarViewMonth, 1).getDay();
+      const daysInMonth = new Date(calendarViewYear, calendarViewMonth + 1, 0).getDate();
+      for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div></div>`;
+      const t = new Date();
+      const todayKey = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateKey = `${calendarViewYear}-${String(calendarViewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const hasData = calendarAvailableDates.has(dateKey);
+        const isViewing = state.viewingDate === dateKey || (!state.viewingDate && dateKeyFromUploadDate(state.uploadDate) === dateKey);
+        const isToday = dateKey === todayKey;
+        let style = 'text-align:center;padding:6px 0;border-radius:6px;';
+        if (hasData) {
+          style += isViewing
+            ? 'cursor:pointer;background:var(--accent);color:#fff;font-weight:700;'
+            : 'cursor:pointer;background:#e7f1fb;color:var(--accent);font-weight:700;';
+        } else {
+          style += 'color:var(--border);';
+        }
+        if (isToday) style += 'box-shadow:0 0 0 2px var(--accent2) inset;';
+        grid.innerHTML += `<div style="${style}" ${hasData ? `onclick="selectCalendarDate('${dateKey}')"` : ''}>${d}</div>`;
+      }
+    }
+    async function selectCalendarDate(dateKey) {
+      try {
+        const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dateKey}.json`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data) { showToast('⚠ 해당 날짜의 데이터를 찾을 수 없습니다'); return; }
+        if (!state.viewingDate) {
+          // 과거 보기로 처음 진입 — 현재 라이브 데이터를 백업
+          state.liveSnapshot = {
+            patients: state.patients, prescriptions: state.prescriptions,
+            reasons: state.reasons, uploadDate: state.uploadDate, lastUpdatedAt: state.lastUpdatedAt,
+          };
+        }
+        state.patients = data.patients || [];
+        state.prescriptions = data.prescriptions || [];
+        state.reasons = data.reasons || {};
+        state.uploadDate = data.uploadDate || dateKey.replace(/-/g, '.');
+        state.lastUpdatedAt = data.lastUpdatedAt || null;
+        state.viewingDate = dateKey;
+        closeCalendarModal();
+        initDashboard();
+        showToast(`📅 ${state.uploadDate} 데이터를 보고 있습니다`);
+      } catch (e) {
+        console.warn(e);
+        showToast('⚠ 데이터를 불러오지 못했습니다');
+      }
+    }
+    function exitHistoryView() {
+      if (state.liveSnapshot) {
+        state.patients = state.liveSnapshot.patients;
+        state.prescriptions = state.liveSnapshot.prescriptions;
+        state.reasons = state.liveSnapshot.reasons;
+        state.uploadDate = state.liveSnapshot.uploadDate;
+        state.lastUpdatedAt = state.liveSnapshot.lastUpdatedAt;
+      }
+      state.viewingDate = null;
+      state.liveSnapshot = null;
+      initDashboard();
+      showToast('✅ 최신 데이터로 돌아왔습니다');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 전체 현황 (하단 collapsible)
+    // ═══════════════════════════════════════════════════════════
+    function toggleGlobal() {
+      const sec = document.getElementById('globalSection');
+      const chev = document.getElementById('globalChevron');
+      sec.classList.toggle('open');
+      chev.classList.toggle('open');
+    }
+
+    function renderGlobalStats() {
+      const allTargets = getAllMatchedPatients();
+      const allPrescribed = allTargets.filter(isPrescribed);
+      const allUnprescribed = allTargets.filter(p => !isPrescribed(p));
+      const recTargets = allTargets.filter(p => p.isRecommended);
+      const recPrescribed = recTargets.filter(isPrescribed);
+      const recUnprescribed = recTargets.filter(p => !isPrescribed(p));
+
+      document.getElementById('kpi-total').textContent = state.patients.length;
+      document.getElementById('kpi-all-target').textContent = allTargets.length;
+      document.getElementById('kpi-all-prescribed').textContent = allPrescribed.length;
+      document.getElementById('kpi-all-unprescribed').textContent = allUnprescribed.length;
+      document.getElementById('kpi-rec-target').textContent = recTargets.length;
+      document.getElementById('kpi-rec-unprescribed').textContent = recUnprescribed.length;
+      document.getElementById('kpi-rec-prescribed').textContent = recPrescribed.length;
+      document.getElementById('kpi-rec-rate').textContent = recTargets.length ? Math.round(recPrescribed.length / recTargets.length * 100) + '%' : '—';
+
+      // 금일 Hicardi 처방 현황 — 조건(나이/보험/재원일수) 무관, 오늘 처방받은 모든 환자 기준
+      const ex871PrescIds = new Set(state.prescriptions.filter(x => x.type === 'EX871').map(x => x.patientId));
+      const e6544PrescIds = new Set(state.prescriptions.filter(x => x.type === 'E6544').map(x => x.patientId));
+      const allPrescIds = new Set([...ex871PrescIds, ...e6544PrescIds]);
+      const recTargetIds = new Set(recTargets.map(p => p.id));
+      const prescAndRecCount = [...allPrescIds].filter(id => recTargetIds.has(id)).length;
+
+      document.getElementById('kpi-today-total-presc').textContent = allPrescIds.size;
+      document.getElementById('kpi-today-ex871').textContent = ex871PrescIds.size;
+      document.getElementById('kpi-today-e6544').textContent = e6544PrescIds.size;
+      document.getElementById('kpi-today-rec-ratio').textContent = allPrescIds.size ? `${prescAndRecCount}/${allPrescIds.size}` : '—';
+
+      const wards = {};
+      allTargets.forEach(p => {
+        if (!wards[p.ward]) wards[p.ward] = { total: 0, prescribed: 0, unprescribed: 0 };
+        wards[p.ward].total++;
+        isPrescribed(p) ? wards[p.ward].prescribed++ : wards[p.ward].unprescribed++;
+      });
+      const wardKeys = Object.keys(wards).sort();
+      document.getElementById('wardCount').textContent = `${wardKeys.length}개 병실/병동`;
+
+      const tbody = document.getElementById('wardTableBody');
+      tbody.innerHTML = '';
+      wardKeys.forEach(w => {
+        const d = wards[w];
+        const pct = d.total ? Math.round(d.prescribed / d.total * 100) : 0;
+        const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warn)' : 'var(--danger)';
+        tbody.innerHTML += `<tr>
+      <td><strong>${w}</strong></td><td>${d.total}</td>
+      <td style="color:var(--success)">${d.prescribed}</td>
+      <td style="color:var(--danger);font-weight:700">${d.unprescribed}</td>
+      <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${pct}%;background:${color}"></div></div><span class="bar-pct">${pct}%</span></div></td>
+    </tr>`;
+      });
+
+      if (wardChartInst) wardChartInst.destroy();
+      const chartEl = document.getElementById('wardChart');
+      if (chartEl) {
+        wardChartInst = new Chart(chartEl, {
+          type: 'bar',
+          data: {
+            labels: wardKeys, datasets: [
+              { label: '처방완료', data: wardKeys.map(w => wards[w].prescribed), backgroundColor: 'rgba(79,217,142,.7)', borderRadius: 4 },
+              { label: '미처방', data: wardKeys.map(w => wards[w].unprescribed), backgroundColor: 'rgba(247,95,95,.85)', borderRadius: 4 },
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#6b8299', font: { size: 11 } } } },
+            scales: { x: { stacked: true, ticks: { color: '#6b8299' }, grid: { color: '#e3edf5' } }, y: { stacked: true, ticks: { color: '#6b8299' }, grid: { color: '#e3edf5' } } }
+          }
+        });
+      }
+
+      const equipBody = document.getElementById('equipTableBody');
+      equipBody.innerHTML = '';
+      const equipWardOrder = Object.keys(EQUIPMENT_INVENTORY);
+      let totalInv = 0, totalActive = 0;
+      equipWardOrder.forEach(w => {
+        const inv = EQUIPMENT_INVENTORY[w];
+        const wardPatients = allTargets.filter(p => p.ward === w);
+        const activeCount = wardPatients.filter(isPrescribed).length;
+        const pct = inv ? Math.min(100, Math.round(activeCount / inv * 100)) : 0;
+        const color = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--success)';
+        totalInv += inv; totalActive += activeCount;
+        equipBody.innerHTML += `<tr>
+      <td><strong>${w}</strong></td><td>${inv}대</td>
+      <td style="color:var(--accent);font-weight:700">${activeCount}대</td>
+      <td>${wardPatients.length}명</td>
+      <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${pct}%;background:${color}"></div></div><span class="bar-pct">${pct}%</span></div></td>
+    </tr>`;
+      });
+      const totalPct = totalInv ? Math.round(totalActive / totalInv * 100) : 0;
+      equipBody.innerHTML += `<tr style="border-top:2px solid var(--border)">
+    <td><strong>전체 합계</strong></td><td><strong>${totalInv}대</strong></td>
+    <td style="color:var(--accent);font-weight:700">${totalActive}대</td>
+    <td>${allTargets.length}명</td>
+    <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${totalPct}%;background:var(--accent)"></div></div><span class="bar-pct">${totalPct}%</span></div></td>
+  </tr>`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    let toastTimer;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    document.getElementById('dateLabel').textContent = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' 기준';
+    state.myWard = loadMyWard();
+    state.isAdmin = loadAdminState();
+    updateAdminUI();
+
+    (async function bootApp() {
+      const cloud = await loadFromCloud();
+      if (!cloud.hasData) {
+        // 클라우드에 데이터가 없으면(최초 1회 등) 이 기기의 마지막 캐시로 대체
+        loadRefFromStorage();
+        loadDailyDataFromStorage();
+        // 클라우드는 접속 가능한데 비어있고, 이 기기에 기존 데이터가 있다면 자동으로 클라우드에 올려 다른 기기와 공유
+        if (cloud.reachable && (state.ex871Ref.length || state.patients.length)) {
+          syncToCloud();
+        }
+      }
+      if (state.ex871Ref.length || state.e6544Ref.length) updateRefBanner();
+      if (state.patients.length > 0) initDashboard();
+      startCloudPolling();
+    })();
+
+  </script>
+</body>
+
 </html>
