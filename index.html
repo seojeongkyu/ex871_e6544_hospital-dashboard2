@@ -482,10 +482,15 @@ async function syncToCloud() {
 
 async function loadFromCloud() {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/dashboard.json`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    // dashboard 전체 + history 키 목록을 병렬로 가져옴
+    const [dashRes, histShallowRes] = await Promise.all([
+      fetch(`${FIREBASE_DB_URL}/dashboard.json`),
+      fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`),
+    ]);
+    if (!dashRes.ok) throw new Error('HTTP ' + dashRes.status);
+    const data = await dashRes.json();
     if (!data) return { reachable: true, hasData: false };
+
     if (data.reference) {
       if (data.reference.ex871Ref) state.ex871Ref = data.reference.ex871Ref;
       if (data.reference.e6544Ref) state.e6544Ref = data.reference.e6544Ref;
@@ -499,6 +504,45 @@ async function loadFromCloud() {
       if (data.daily.reasons) state.reasons = data.daily.reasons;
       if (data.daily.lastUpdatedAt !== undefined) state.lastUpdatedAt = data.daily.lastUpdatedAt;
     }
+
+    // history 중 가장 최신 날짜가 dashboard/daily 보다 더 최신이면 그걸 사용
+    // (daily 업데이트가 누락된 경우 등에도 항상 최신 데이터를 보여주기 위함)
+    if (histShallowRes.ok) {
+      const histKeys = await histShallowRes.json();
+      if (histKeys) {
+        const latestHistKey = Object.keys(histKeys).sort().pop(); // 'YYYY-MM-DD' 문자열 정렬
+        const currentDateKey = dateKeyFromUploadDate(state.uploadDate);
+        if (latestHistKey && (!currentDateKey || latestHistKey > currentDateKey)) {
+          // history에 더 최신 날짜의 데이터가 있음 → 해당 데이터로 교체
+          const latestRes = await fetch(`${FIREBASE_DB_URL}/dashboard/history/${latestHistKey}.json`);
+          if (latestRes.ok) {
+            const latest = await latestRes.json();
+            if (latest) {
+              if (latest.patients) state.patients = latest.patients;
+              if (latest.prescriptions) state.prescriptions = latest.prescriptions;
+              if (latest.uploadDate) state.uploadDate = latest.uploadDate;
+              state.uploadTimeLabel = latest.uploadTimeLabel || '';
+              if (latest.reasons) state.reasons = latest.reasons;
+              if (latest.lastUpdatedAt) state.lastUpdatedAt = latest.lastUpdatedAt;
+              // daily도 최신 상태로 업데이트 (다음 접속부터는 바로 최신 데이터를 가져오도록)
+              fetch(`${FIREBASE_DB_URL}/dashboard/daily.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  patients: state.patients,
+                  prescriptions: state.prescriptions,
+                  uploadDate: state.uploadDate,
+                  uploadTimeLabel: state.uploadTimeLabel,
+                  reasons: state.reasons,
+                  lastUpdatedAt: state.lastUpdatedAt,
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+    }
+
     // 로컬에도 캐싱(오프라인 대비)
     try {
       localStorage.setItem('hosp_ex871_ref', JSON.stringify(state.ex871Ref));
@@ -507,6 +551,7 @@ async function loadFromCloud() {
       localStorage.setItem('hosp_patients', JSON.stringify(state.patients));
       localStorage.setItem('hosp_prescriptions', JSON.stringify(state.prescriptions));
       localStorage.setItem('hosp_upload_date', state.uploadDate);
+      localStorage.setItem('hosp_upload_time_label', state.uploadTimeLabel || '');
       localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
       localStorage.setItem('hosp_last_updated_at', state.lastUpdatedAt || '');
     } catch(e) {}
