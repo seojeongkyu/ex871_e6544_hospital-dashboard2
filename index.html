@@ -429,29 +429,34 @@ function dateKeyFromUploadDate(ud) {
 
 async function syncToCloud() {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/dashboard.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        reference: {
+    // ⚠ /dashboard.json 전체를 PUT으로 덮어쓰면 history 노드가 사라지므로,
+    // reference와 daily를 각각 별도 경로에 PUT합니다.
+    const [refRes, dailyRes] = await Promise.all([
+      fetch(`${FIREBASE_DB_URL}/dashboard/reference.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ex871Ref: state.ex871Ref,
           e6544Ref: state.e6544Ref,
           bedCounts: state.bedCounts,
-        },
-        daily: {
+        }),
+      }),
+      fetch(`${FIREBASE_DB_URL}/dashboard/daily.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           patients: state.patients,
           prescriptions: state.prescriptions,
           uploadDate: state.uploadDate,
           reasons: state.reasons,
           lastUpdatedAt: state.lastUpdatedAt,
-        },
-        updatedAt: Date.now(),
+        }),
       }),
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    ]);
+    if (!refRes.ok) throw new Error('ref HTTP ' + refRes.status);
+    if (!dailyRes.ok) throw new Error('daily HTTP ' + dailyRes.status);
 
-    // 날짜별 히스토리 스냅샷도 함께 저장 (캘린더에서 과거 날짜 조회용)
-    // 과거 데이터를 보는 중에는(state.viewingDate) 절대 히스토리를 덮어쓰지 않음
+    // 날짜별 히스토리 스냅샷 저장 (과거 보기 중에는 절대 덮어쓰지 않음)
     const dateKey = dateKeyFromUploadDate(state.uploadDate);
     if (dateKey && state.patients.length && !state.viewingDate) {
       await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dateKey}.json`, {
