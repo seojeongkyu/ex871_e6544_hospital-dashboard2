@@ -385,14 +385,27 @@
         <div class="card">
           <div class="card-header"><div class="card-title">병동(병실)별 전체 대상자 현황</div><span style="font-size:12px;color:var(--muted)" id="wardCount">—</span></div>
           <div class="table-scroll">
-            <table class="ward-table"><thead><tr><th>병동</th><th>전체대상</th><th>처방</th><th>미처방</th><th>처방률</th></tr></thead><tbody id="wardTableBody"></tbody></table>
+            <table class="ward-table"><thead><tr><th>병동</th><th>재원환자</th><th>권고대상</th><th>처방완료</th><th>미처방</th><th>처방률(권고대상)</th></tr></thead><tbody id="wardTableBody"></tbody></table>
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><div class="card-title">병동별 처방 현황 (전체 대상자 기준)</div></div>
+          <div class="card-header"><div class="card-title">병동별 처방 현황 (권고대상 기준)</div></div>
           <div class="card-body"><div class="chart-wrap"><canvas id="wardChart"></canvas></div></div>
         </div>
       </div>
+
+      <!-- 추이 그래프 영역 -->
+      <div class="grid-2" id="trendSection" style="display:none">
+        <div class="card">
+          <div class="card-header"><div class="card-title">📈 일별 처방 추이</div><span style="font-size:12px;color:var(--muted)" id="trendDailyLabel">최근 데이터 기준</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="trendDailyChart"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">📊 월별 처방 합산</div><span style="font-size:12px;color:var(--muted)" id="trendMonthlyLabel"></span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="trendMonthlyChart"></canvas></div></div>
+        </div>
+      </div>
+      <div id="trendLoading" style="text-align:center;color:var(--muted);padding:18px;font-size:13px;">📅 날짜별 추이 데이터 불러오는 중...</div>
 
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
@@ -480,6 +493,24 @@ async function syncToCloud() {
     // 날짜별 히스토리 스냅샷 저장 (과거 보기 중에는 절대 덮어쓰지 않음)
     const dateKey = dateKeyFromUploadDate(state.uploadDate);
     if (dateKey && state.patients.length && !state.viewingDate) {
+      // 집계 요약 계산 (추이 그래프용 — 전체 환자 배열을 매번 다운받지 않아도 되게)
+      const _allTargets = getAllMatchedPatients();
+      const _recTargets = _allTargets.filter(p=>p.isRecommended);
+      const _recPrescribed = _recTargets.filter(isPrescribed);
+      const _recUnprescribed = _recTargets.filter(p=>!isPrescribed(p));
+      const _ex871Ids = new Set(state.prescriptions.filter(x=>x.type==='EX871').map(x=>x.patientId));
+      const _e6544Ids = new Set(state.prescriptions.filter(x=>x.type==='E6544').map(x=>x.patientId));
+      const summaryStats = {
+        totalPatients: state.patients.length,
+        allTargets: _allTargets.length,
+        ex871Prescribed: _ex871Ids.size,
+        e6544Prescribed: _e6544Ids.size,
+        totalPrescribed: new Set([..._ex871Ids, ..._e6544Ids]).size,
+        recTotal: _recTargets.length,
+        recPrescribed: _recPrescribed.length,
+        recUnprescribed: _recUnprescribed.length,
+        recRate: _recTargets.length ? Math.round(_recPrescribed.length/_recTargets.length*100) : 0,
+      };
       await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dateKey}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -490,6 +521,7 @@ async function syncToCloud() {
           uploadDate: state.uploadDate,
           uploadTimeLabel: state.uploadTimeLabel || '',
           lastUpdatedAt: state.lastUpdatedAt,
+          summaryStats,
         }),
       });
     }
@@ -1683,7 +1715,6 @@ function renderGlobalStats() {
   document.getElementById('kpi-rec-prescribed').textContent = recPrescribed.length;
   document.getElementById('kpi-rec-rate').textContent = recTargets.length ? Math.round(recPrescribed.length/recTargets.length*100)+'%' : '—';
 
-  // 금일 Hicardi 처방 현황 — 조건(나이/보험/재원일수) 무관, 오늘 처방받은 모든 환자 기준
   const ex871PrescIds = new Set(state.prescriptions.filter(x=>x.type==='EX871').map(x=>x.patientId));
   const e6544PrescIds = new Set(state.prescriptions.filter(x=>x.type==='E6544').map(x=>x.patientId));
   const allPrescIds = new Set([...ex871PrescIds, ...e6544PrescIds]);
@@ -1695,25 +1726,23 @@ function renderGlobalStats() {
   document.getElementById('kpi-today-e6544').textContent = e6544PrescIds.size;
   document.getElementById('kpi-today-rec-ratio').textContent = allPrescIds.size ? `${prescAndRecCount}/${allPrescIds.size}` : '—';
 
-  const wards = {};
-  allTargets.forEach(p => {
-    if (!wards[p.ward]) wards[p.ward] = {total:0, prescribed:0, unprescribed:0};
-    wards[p.ward].total++;
-    isPrescribed(p) ? wards[p.ward].prescribed++ : wards[p.ward].unprescribed++;
-  });
+  // 병동 테이블 — getWardSummaries()와 동일한 로직 사용 (병동 카드와 일치)
+  const wards = getWardSummaries();
   const wardKeys = Object.keys(wards).sort();
-  document.getElementById('wardCount').textContent = `${wardKeys.length}개 병실/병동`;
+  document.getElementById('wardCount').textContent = `${wardKeys.length}개 병동`;
 
   const tbody = document.getElementById('wardTableBody');
   tbody.innerHTML = '';
   wardKeys.forEach(w => {
     const d = wards[w];
-    const pct = d.total ? Math.round(d.prescribed/d.total*100) : 0;
+    const pct = d.recTotal ? Math.round(d.recPrescribed/d.recTotal*100) : 0;
     const color = pct>=80?'var(--success)':pct>=50?'var(--warn)':'var(--danger)';
     tbody.innerHTML += `<tr>
-      <td><strong>${w}</strong></td><td>${d.total}</td>
-      <td style="color:var(--success)">${d.prescribed}</td>
-      <td style="color:var(--danger);font-weight:700">${d.unprescribed}</td>
+      <td><strong>${w}</strong></td>
+      <td>${d.patientCount}</td>
+      <td style="color:var(--warn);font-weight:700">${d.recTotal}</td>
+      <td style="color:var(--success);font-weight:700">${d.recPrescribed}</td>
+      <td style="color:var(--danger);font-weight:700">${d.recUnprescribed}</td>
       <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${pct}%;background:${color}"></div></div><span class="bar-pct">${pct}%</span></div></td>
     </tr>`;
   });
@@ -1724,8 +1753,8 @@ function renderGlobalStats() {
     wardChartInst = new Chart(chartEl, {
       type: 'bar',
       data: { labels: wardKeys, datasets: [
-        { label:'처방완료', data: wardKeys.map(w=>wards[w].prescribed), backgroundColor:'rgba(79,217,142,.7)', borderRadius:4 },
-        { label:'미처방', data: wardKeys.map(w=>wards[w].unprescribed), backgroundColor:'rgba(247,95,95,.85)', borderRadius:4 },
+        { label:'처방완료(권고대상)', data: wardKeys.map(w=>wards[w].recPrescribed), backgroundColor:'rgba(79,217,142,.75)', borderRadius:4 },
+        { label:'미처방(권고대상)', data: wardKeys.map(w=>wards[w].recUnprescribed), backgroundColor:'rgba(247,95,95,.85)', borderRadius:4 },
       ]},
       options: { responsive:true, maintainAspectRatio:false,
         plugins:{legend:{labels:{color:'#6b8299',font:{size:11}}}},
@@ -1740,15 +1769,15 @@ function renderGlobalStats() {
   let totalInv = 0, totalActive = 0;
   equipWardOrder.forEach(w => {
     const inv = EQUIPMENT_INVENTORY[w];
-    const wardPatients = allTargets.filter(p => p.ward === w);
-    const activeCount = wardPatients.filter(isPrescribed).length;
+    const wardData = wards[w] || { totalPrescribedAny:0, recTotal:0 };
+    const activeCount = wardData.totalPrescribedAny;
     const pct = inv ? Math.min(100, Math.round(activeCount / inv * 100)) : 0;
     const color = pct>=90?'var(--danger)':pct>=70?'var(--warn)':'var(--success)';
     totalInv += inv; totalActive += activeCount;
     equipBody.innerHTML += `<tr>
       <td><strong>${w}</strong></td><td>${inv}대</td>
       <td style="color:var(--accent);font-weight:700">${activeCount}대</td>
-      <td>${wardPatients.length}명</td>
+      <td>${wardData.recTotal}명</td>
       <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${pct}%;background:${color}"></div></div><span class="bar-pct">${pct}%</span></div></td>
     </tr>`;
   });
@@ -1756,9 +1785,278 @@ function renderGlobalStats() {
   equipBody.innerHTML += `<tr style="border-top:2px solid var(--border)">
     <td><strong>전체 합계</strong></td><td><strong>${totalInv}대</strong></td>
     <td style="color:var(--accent);font-weight:700">${totalActive}대</td>
-    <td>${allTargets.length}명</td>
+    <td>${recTargets.length}명</td>
     <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${totalPct}%;background:var(--accent)"></div></div><span class="bar-pct">${totalPct}%</span></div></td>
   </tr>`;
+
+  // 추이 그래프 — Firebase history에서 날짜별 데이터 비동기 로드
+  renderTrendCharts();
+}
+
+let trendDailyInst = null, trendMonthlyInst = null;
+async function renderTrendCharts() {
+  document.getElementById('trendLoading').style.display = 'block';
+  document.getElementById('trendSection').style.display = 'none';
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
+    if (!res.ok) throw new Error();
+    const keys = await res.json();
+    if (!keys || Object.keys(keys).length < 2) {
+      document.getElementById('trendLoading').textContent = '📅 데이터가 2일 이상 누적되면 추이 그래프가 표시됩니다.';
+      return;
+    }
+    const sortedKeys = Object.keys(keys).sort();
+
+    const entries = await Promise.all(sortedKeys.map(async dk => {
+      try {
+        const [ssRes, udRes] = await Promise.all([
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/summaryStats.json`),
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/uploadDate.json`),
+        ]);
+        const uploadDate = udRes.ok ? await udRes.json() : dk.replace(/-/g,'.');
+        if (ssRes.ok) {
+          const ss = await ssRes.json();
+          if (ss && ss.recTotal != null) return { dateKey: dk, uploadDate, ...ss };
+        }
+        // summaryStats 없는 과거 데이터 → prescriptions로 최소 집계
+        const pRes = await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/prescriptions.json`);
+        const prescs = pRes.ok ? await pRes.json() : [];
+        const ex871 = new Set((prescs||[]).filter(x=>x.type==='EX871').map(x=>x.patientId)).size;
+        const e6544 = new Set((prescs||[]).filter(x=>x.type==='E6544').map(x=>x.patientId)).size;
+        return { dateKey: dk, uploadDate,
+          ex871Prescribed: ex871, e6544Prescribed: e6544,
+          totalPrescribed: new Set((prescs||[]).map(x=>x.patientId)).size,
+          recTotal: null, recPrescribed: null, recUnprescribed: null, recRate: null };
+      } catch(e) { return null; }
+    }));
+    const valid = entries.filter(Boolean);
+    if (!valid.length) throw new Error('no valid');
+
+    const dayLabels = valid.map(e => {
+      const p = e.uploadDate.split('.');
+      return p.length>=3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : e.dateKey.slice(5);
+    });
+    document.getElementById('trendDailyLabel').textContent = `${dayLabels[0]} ~ ${dayLabels[dayLabels.length-1]}`;
+
+    // recTotal 데이터가 있는 날짜는 처방완료+미처방 스택, 없는 날짜는 처방건수만
+    const hasRec = valid.some(e => e.recTotal != null);
+
+    if (trendDailyInst) trendDailyInst.destroy();
+    trendDailyInst = new Chart(document.getElementById('trendDailyChart'), {
+      type: 'bar',
+      data: { labels: dayLabels, datasets: hasRec ? [
+        {
+          label: '처방완료 (권고대상)',
+          data: valid.map(e => e.recPrescribed ?? 0),
+          backgroundColor: 'rgba(47,158,99,.85)',
+          borderRadius: { topLeft:0, topRight:0, bottomLeft:5, bottomRight:5 },
+          stack: 'rec',
+        },
+        {
+          label: '미처방 ← 낮출수록 좋음',
+          data: valid.map(e => e.recUnprescribed ?? 0),
+          backgroundColor: 'rgba(220,53,69,.82)',
+          borderRadius: { topLeft:5, topRight:5, bottomLeft:0, bottomRight:0 },
+          stack: 'rec',
+        },
+      ] : [
+        { label:'처방건수(EX871)', data: valid.map(e=>e.ex871Prescribed??0), backgroundColor:'rgba(47,127,214,.75)', stack:'p', borderRadius:4 },
+        { label:'처방건수(E6544)', data: valid.map(e=>e.e6544Prescribed??0), backgroundColor:'rgba(74,168,199,.65)', stack:'p', borderRadius:4 },
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels:{ color:'#6b8299', font:{size:11} } },
+          tooltip: {
+            callbacks: {
+              afterBody: items => {
+                const e = valid[items[0].dataIndex];
+                if (e.recTotal == null) return '';
+                const rate = e.recRate ?? (e.recTotal ? Math.round(e.recPrescribed/e.recTotal*100) : 0);
+                return [`권고대상 합계: ${e.recTotal}명`, `처방률: ${rate}%`];
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
+          y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
+               title:{ display:true, text:'인원 (명)', color:'#6b8299', font:{size:11} } }
+        }
+      }
+    });
+
+    // 월별 합산
+    const monthMap = {};
+    valid.forEach(e => {
+      const p = e.uploadDate.split('.');
+      const mk = p.length>=2 ? `${p[0]}.${p[1]}` : e.dateKey.slice(0,7);
+      if (!monthMap[mk]) monthMap[mk] = { recPrescribed:0, recUnprescribed:0, ex871:0, e6544:0, days:0 };
+      monthMap[mk].recPrescribed   += e.recPrescribed   ?? 0;
+      monthMap[mk].recUnprescribed += e.recUnprescribed ?? 0;
+      monthMap[mk].ex871           += e.ex871Prescribed ?? 0;
+      monthMap[mk].e6544           += e.e6544Prescribed ?? 0;
+      monthMap[mk].days++;
+    });
+    const mks = Object.keys(monthMap).sort();
+    document.getElementById('trendMonthlyLabel').textContent = `${mks.length}개월 합산`;
+
+    if (trendMonthlyInst) trendMonthlyInst.destroy();
+    trendMonthlyInst = new Chart(document.getElementById('trendMonthlyChart'), {
+      type: 'bar',
+      data: { labels: mks.map(k=>`'${k.slice(2,4)}.${k.slice(5,7)}월`), datasets: hasRec ? [
+        {
+          label: '처방완료 (월합)',
+          data: mks.map(k=>monthMap[k].recPrescribed),
+          backgroundColor: 'rgba(47,158,99,.85)',
+          borderRadius: { topLeft:0, topRight:0, bottomLeft:6, bottomRight:6 },
+          stack: 'rec',
+        },
+        {
+          label: '미처방 (월합)',
+          data: mks.map(k=>monthMap[k].recUnprescribed),
+          backgroundColor: 'rgba(220,53,69,.82)',
+          borderRadius: { topLeft:6, topRight:6, bottomLeft:0, bottomRight:0 },
+          stack: 'rec',
+        },
+      ] : [
+        { label:'EX871 처방(월합)', data: mks.map(k=>monthMap[k].ex871), backgroundColor:'rgba(47,127,214,.75)', stack:'p', borderRadius:6 },
+        { label:'E6544 처방(월합)', data: mks.map(k=>monthMap[k].e6544), backgroundColor:'rgba(74,168,199,.65)', stack:'p', borderRadius:6 },
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend:{ labels:{color:'#6b8299',font:{size:11}} } },
+        scales: {
+          x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
+          y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
+               title:{ display:true, text:'인원 (명)', color:'#6b8299', font:{size:11} } }
+        }
+      }
+    });
+
+    document.getElementById('trendLoading').style.display = 'none';
+    document.getElementById('trendSection').style.display = '';
+  } catch(e) {
+    document.getElementById('trendLoading').textContent = '📅 데이터가 2일 이상 누적되면 추이 그래프가 표시됩니다.';
+  }
+}
+  document.getElementById('trendLoading').style.display = 'block';
+  document.getElementById('trendSection').style.display = 'none';
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
+    if (!res.ok) throw new Error();
+    const keys = await res.json();
+    if (!keys || Object.keys(keys).length < 2) {
+      document.getElementById('trendLoading').textContent = '📅 데이터가 2일 이상 누적되면 추이 그래프가 표시됩니다.';
+      return;
+    }
+    const sortedKeys = Object.keys(keys).sort();
+
+    // 각 날짜의 summaryStats만 가져오기 (전체 환자 배열 다운로드 없이 경량)
+    const entries = await Promise.all(sortedKeys.map(async dk => {
+      try {
+        const [ssRes, udRes] = await Promise.all([
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/summaryStats.json`),
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/uploadDate.json`),
+        ]);
+        const uploadDate = udRes.ok ? await udRes.json() : dk.replace(/-/g,'.');
+
+        if (ssRes.ok) {
+          // summaryStats가 있는 날짜 (새 코드 배포 이후 업로드분)
+          const ss = await ssRes.json();
+          if (ss) return { dateKey: dk, uploadDate, ...ss };
+        }
+        // summaryStats 없는 날짜(과거분) → prescriptions만 가져와서 최소 집계
+        const pRes = await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/prescriptions.json`);
+        const prescs = pRes.ok ? await pRes.json() : [];
+        const ex871 = new Set((prescs||[]).filter(x=>x.type==='EX871').map(x=>x.patientId)).size;
+        const e6544 = new Set((prescs||[]).filter(x=>x.type==='E6544').map(x=>x.patientId)).size;
+        return { dateKey: dk, uploadDate, ex871Prescribed: ex871, e6544Prescribed: e6544,
+          totalPrescribed: new Set((prescs||[]).map(x=>x.patientId)).size,
+          recTotal: null, recPrescribed: null, recUnprescribed: null, recRate: null };
+      } catch(e) { return null; }
+    }));
+    const valid = entries.filter(Boolean);
+    if (!valid.length) throw new Error('no valid');
+
+    const dayLabels = valid.map(e => {
+      const p = e.uploadDate.split('.');
+      return p.length>=3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : e.dateKey.slice(5);
+    });
+    document.getElementById('trendDailyLabel').textContent = `${dayLabels[0]} ~ ${dayLabels[dayLabels.length-1]}`;
+
+    const hasRec = valid.some(e => e.recTotal !== null);
+
+    if (trendDailyInst) trendDailyInst.destroy();
+    const dailyDatasets = [
+      { label:'처방완료(권고대상)', data: valid.map(e=>e.recPrescribed ?? e.totalPrescribed),
+        backgroundColor:'rgba(47,158,99,.8)', borderRadius:4, stack:'a' },
+      { label:'미처방(권고대상)', data: valid.map(e=>e.recUnprescribed ?? null),
+        backgroundColor:'rgba(231,76,60,.75)', borderRadius:4, stack:'a' },
+      { label:'EX871 처방', data: valid.map(e=>e.ex871Prescribed ?? 0),
+        backgroundColor:'rgba(47,127,214,.65)', borderRadius:4, stack:'b' },
+      { label:'E6544 처방', data: valid.map(e=>e.e6544Prescribed ?? 0),
+        backgroundColor:'rgba(74,168,199,.55)', borderRadius:4, stack:'b' },
+    ].filter(d => d.data.some(v=>v !== null && v > 0));
+
+    trendDailyInst = new Chart(document.getElementById('trendDailyChart'), {
+      type: 'bar',
+      data: { labels: dayLabels, datasets: dailyDatasets },
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{labels:{color:'#6b8299',font:{size:11}}},
+          tooltip:{ callbacks:{
+            footer: items => {
+              const byStack = {};
+              items.forEach(i=>{ byStack[i.dataset.stack]=(byStack[i.dataset.stack]||0)+i.raw; });
+              return Object.entries(byStack).map(([k,v])=>k==='a'?`권고대상 합계: ${v}명`:`처방 합계: ${v}건`).join('\n');
+            }
+          }}
+        },
+        scales:{
+          x:{ticks:{color:'#6b8299'},grid:{color:'#e3edf5'}},
+          y:{beginAtZero:true,ticks:{color:'#6b8299'},grid:{color:'#e3edf5'}}
+        }
+      }
+    });
+
+    // 월별 합산
+    const monthMap = {};
+    valid.forEach(e => {
+      const p = e.uploadDate.split('.');
+      const monthKey = p.length>=2 ? `${p[0]}.${p[1]}` : e.dateKey.slice(0,7);
+      if (!monthMap[monthKey]) monthMap[monthKey] = {recPrescribed:0, recUnprescribed:0, ex871:0, e6544:0};
+      monthMap[monthKey].recPrescribed  += e.recPrescribed  ?? 0;
+      monthMap[monthKey].recUnprescribed+= e.recUnprescribed?? 0;
+      monthMap[monthKey].ex871          += e.ex871Prescribed ?? 0;
+      monthMap[monthKey].e6544          += e.e6544Prescribed ?? 0;
+    });
+    const monthKeys = Object.keys(monthMap).sort();
+    document.getElementById('trendMonthlyLabel').textContent = `${monthKeys.length}개월 합산`;
+
+    if (trendMonthlyInst) trendMonthlyInst.destroy();
+    trendMonthlyInst = new Chart(document.getElementById('trendMonthlyChart'), {
+      type: 'bar',
+      data: { labels: monthKeys.map(k=>`'${k.slice(2,4)}.${k.slice(5,7)}월`), datasets: [
+        { label:'처방완료(권고대상)', data: monthKeys.map(k=>monthMap[k].recPrescribed),
+          backgroundColor:'rgba(47,158,99,.8)', borderRadius:6 },
+        { label:'미처방(권고대상)', data: monthKeys.map(k=>monthMap[k].recUnprescribed),
+          backgroundColor:'rgba(231,76,60,.75)', borderRadius:6 },
+        { label:'EX871 처방', data: monthKeys.map(k=>monthMap[k].ex871),
+          backgroundColor:'rgba(47,127,214,.55)', borderRadius:6 },
+        { label:'E6544 처방', data: monthKeys.map(k=>monthMap[k].e6544),
+          backgroundColor:'rgba(74,168,199,.45)', borderRadius:6 },
+      ]},
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{labels:{color:'#6b8299',font:{size:11}}} },
+        scales:{x:{ticks:{color:'#6b8299'},grid:{color:'#e3edf5'}}, y:{beginAtZero:true,ticks:{color:'#6b8299'},grid:{color:'#e3edf5'}}}
+      }
+    });
+
+    document.getElementById('trendLoading').style.display = 'none';
+    document.getElementById('trendSection').style.display = '';
+  } catch(e) {
+    document.getElementById('trendLoading').textContent = '📅 데이터가 2일 이상 누적되면 추이 그래프가 표시됩니다.';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
