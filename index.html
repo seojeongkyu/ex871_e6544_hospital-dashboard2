@@ -362,7 +362,7 @@
         <div class="kpi-card success"><div class="kpi-label">오늘 처방 완료(전체)</div><div class="kpi-value" id="kpi-today-total-presc" style="color:var(--success)">—</div><div class="kpi-sub">EX871+E6544 처방받은 모든 환자</div></div>
         <div class="kpi-card"><div class="kpi-label">EX871 처방</div><div class="kpi-value" id="kpi-today-ex871" style="color:var(--accent)">—</div><div class="kpi-sub">건수</div></div>
         <div class="kpi-card"><div class="kpi-label">E6544 처방</div><div class="kpi-value" id="kpi-today-e6544" style="color:var(--accent2)">—</div><div class="kpi-sub">건수</div></div>
-        <div class="kpi-card"><div class="kpi-label">처방 중 권고대상 비율</div><div class="kpi-value" id="kpi-today-rec-ratio">—</div><div class="kpi-sub">전체 처방자 중 70세+·7일내·건보자보</div></div>
+        <div class="kpi-card"><div class="kpi-label">처방 중 권고대상 비율</div><div class="kpi-value" id="kpi-today-rec-ratio">—</div><div class="kpi-sub">전체 처방자 중 70세+·3일내·건보자보</div></div>
       </div>
 
       <div class="kpi-section-label">📊 전체 대상자 현황 (나이 무관)<div class="line"></div></div>
@@ -373,7 +373,7 @@
         <div class="kpi-card danger"><div class="kpi-label">미처방(전체)</div><div class="kpi-value" id="kpi-all-unprescribed" style="color:var(--danger)">—</div><div class="kpi-sub">참고용</div></div>
       </div>
 
-      <div class="kpi-section-label">⚠ 처방 권고 대상 (70세↑·7일내·건보/자보)<div class="line"></div></div>
+      <div class="kpi-section-label">⚠ 처방 권고 대상 (70세↑·3일내·건보/자보)<div class="line"></div></div>
       <div class="kpi-row">
         <div class="kpi-card warn"><div class="kpi-label">권고 대상자</div><div class="kpi-value" id="kpi-rec-target" style="color:var(--warn)">—</div><div class="kpi-sub">조건 충족 환자 수</div></div>
         <div class="kpi-card danger"><div class="kpi-label">⚠ 미처방(권고대상)</div><div class="kpi-value" id="kpi-rec-unprescribed" style="color:var(--danger)">—</div><div class="kpi-sub">즉시 처방 필요</div></div>
@@ -1098,13 +1098,13 @@ function getAllMatchedPatients() {
   return state.patients.filter(p => {
     const isEx = matchDisease(p.disease, state.ex871Ref);
     const isE6 = matchDisease(p.disease, state.e6544Ref);
-    const isElderlyCovered = p.age >= 70 && p.days <= 7 && ['건강보험','자보'].includes(p.insSimple);
+    const isElderlyCovered = p.age >= 70 && p.days <= 3 && ['건강보험','자보'].includes(p.insSimple);
     const wasPrescribed = ex871PrescIds.has(p.id) || e6544PrescIds.has(p.id);
     return isEx || isE6 || (!isEx && isElderlyCovered) || wasPrescribed;
   }).map(p => {
     const isEx871Target = matchDisease(p.disease, state.ex871Ref);
     const diseaseE6544Target = matchDisease(p.disease, state.e6544Ref);
-    const meetsAgeInsDays = p.age >= 70 && p.days <= 7 && ['건강보험','자보'].includes(p.insSimple);
+    const meetsAgeInsDays = p.age >= 70 && p.days <= 3 && ['건강보험','자보'].includes(p.insSimple);
     const e6544ByAgeRule = !isEx871Target && meetsAgeInsDays;
     const isE6544Target = diseaseE6544Target || e6544ByAgeRule;
     const isRecommended = (isEx871Target || diseaseE6544Target) ? meetsAgeInsDays : e6544ByAgeRule;
@@ -1420,7 +1420,7 @@ function getWardPrescribedAny(ward) {
       ...p,
       gotEx871: ex871PrescIds.has(p.id),
       gotE6544: e6544PrescIds.has(p.id),
-      meetsRecCond: p.age >= 70 && p.days <= 7 && ['건강보험','자보'].includes(p.insSimple),
+      meetsRecCond: p.age >= 70 && p.days <= 3 && ['건강보험','자보'].includes(p.insSimple),
     }));
 }
 
@@ -1837,7 +1837,7 @@ async function renderTrendCharts() {
         patients.forEach(p => {
           const isEx = matchDisease(p.disease, state.ex871Ref);
           const isE6 = matchDisease(p.disease, state.e6544Ref);
-          const meetsAge = p.age >= 70 && p.days <= 7 && ['건강보험','자보'].includes(p.insSimple);
+          const meetsAge = p.age >= 70 && p.days <= 3 && ['건강보험','자보'].includes(p.insSimple);
           const isRec = (isEx || isE6) ? meetsAge : (meetsAge && !isEx);
           if (isRec) {
             recTotal++;
