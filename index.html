@@ -161,6 +161,15 @@
   .tag.norecommend { background: var(--surface2); color: var(--muted); }
 
   .reason-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px;
+  .confirm-wrap { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .confirm-check { width:18px; height:18px; cursor:pointer; accent-color: var(--success); flex-shrink:0; }
+  .confirm-note { flex:1; min-width:100px; padding:4px 8px; border:1px solid var(--border); border-radius:6px;
+    font-size:11.5px; background:var(--surface2); color:var(--text); }
+  .confirm-note:focus { outline:none; border-color:var(--success); }
+  .confirm-note:disabled { opacity:.5; }
+  .confirmed-row td { background: rgba(47,158,99,.07) !important; }
+  .confirm-badge { font-size:10px; background:#e8f7ef; color:var(--success); border:1px solid #b2dfc8;
+    border-radius:5px; padding:2px 6px; font-weight:600; white-space:nowrap; }
     padding: 5px 8px; font-size: 11.5px; width: 150px; outline: none; font-family: var(--font); }
   .reason-input:focus { border-color: var(--warn); }
   .save-btn { background: var(--warn); color: #fff; border: none; border-radius: 6px; padding: 4px 9px; font-size: 10.5px; font-weight: 700; cursor: pointer; margin-left: 5px; }
@@ -517,7 +526,7 @@
 let state = {
   ex871Ref: [], e6544Ref: [],
   patients: [], prescriptions: [],
-  reasons: {}, myWard: '',
+  reasons: {}, confirmations: {}, myWard: '',
   expandedWard: null, wardTab: 'all',
   isAdmin: false,
   uploadDate: '',
@@ -647,6 +656,7 @@ async function syncToCloud() {
           uploadDate: state.uploadDate,
           uploadTimeLabel: state.uploadTimeLabel || '',
           reasons: state.reasons,
+          confirmations: state.confirmations,
           lastUpdatedAt: state.lastUpdatedAt,
         }),
       }),
@@ -717,6 +727,7 @@ async function loadFromCloud() {
       if (data.daily.uploadDate !== undefined) state.uploadDate = data.daily.uploadDate;
       if (data.daily.uploadTimeLabel !== undefined) state.uploadTimeLabel = data.daily.uploadTimeLabel || '';
       if (data.daily.reasons) state.reasons = data.daily.reasons;
+      if (data.daily.confirmations) state.confirmations = data.daily.confirmations;
       if (data.daily.lastUpdatedAt !== undefined) state.lastUpdatedAt = data.daily.lastUpdatedAt;
     }
 
@@ -847,6 +858,7 @@ function saveDailyDataToStorage() {
     localStorage.setItem('hosp_upload_date', state.uploadDate);
     localStorage.setItem('hosp_upload_time_label', state.uploadTimeLabel || '');
     localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
+    localStorage.setItem('hosp_confirmations', JSON.stringify(state.confirmations));
     localStorage.setItem('hosp_last_updated_at', state.lastUpdatedAt || '');
   } catch(e) {}
   syncToCloud();
@@ -858,12 +870,14 @@ function loadDailyDataFromStorage() {
     const udate = localStorage.getItem('hosp_upload_date');
     const utl = localStorage.getItem('hosp_upload_time_label');
     const reasons = localStorage.getItem('hosp_reasons');
+    const confs = localStorage.getItem('hosp_confirmations');
     const lua = localStorage.getItem('hosp_last_updated_at');
     if (pts) state.patients = JSON.parse(pts);
     if (prescs) state.prescriptions = JSON.parse(prescs);
     if (udate) state.uploadDate = udate;
     if (utl !== null) state.uploadTimeLabel = utl;
     if (reasons) state.reasons = JSON.parse(reasons);
+    if (confs) state.confirmations = JSON.parse(confs);
     if (lua) state.lastUpdatedAt = parseInt(lua, 10) || null;
     return state.patients && state.patients.length > 0;
   } catch(e) { return false; }
@@ -1566,7 +1580,7 @@ function renderWardAccordion(ward, panel) {
       <div class="table-scroll">
         <table class="pt-table">
           <thead>
-            <tr><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>재원일수</th><th>급종</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
+            <tr><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>재원일수</th><th>급종</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th><th style="min-width:160px">✅ 확인</th></tr>
           </thead>
           <tbody id="ptTableBody-${ward}"></tbody>
         </table>
@@ -1634,11 +1648,15 @@ function renderWardPatientTable(ward) {
   pts.forEach(p => {
     const {ex871Presc, e6544Presc} = getPrescriptionStatus(p);
     const unpresc = !isPrescribed(p);
-    const rowClass = (p.isRecommended && unpresc) ? 'unprescribed-target' : (isPrescribed(p) ? 'prescribed-row' : (!p.isRecommended ? 'not-target' : ''));
+    const conf = state.confirmations[p.id] || { checked: false, note: '' };
+    const isConfirmed = conf.checked;
+    const rowClass = isConfirmed ? 'confirmed-row'
+      : (p.isRecommended && unpresc) ? 'unprescribed-target'
+      : (isPrescribed(p) ? 'prescribed-row'
+      : (!p.isRecommended ? 'not-target' : ''));
     const insTag = p.insSimple==='자보' ? `<span class="tag car">자보</span>` : (p.insSimple==='건강보험' ? `<span class="tag insurance">건강보험</span>` : `<span class="tag none">${p.insSimple}</span>`);
     const savedReason = state.reasons[p.id] || '';
 
-    // 실제 처방 여부를 항상 우선 표시. 권고대상이 아니어도 처방받았으면 그 사실을 보여줌.
     const exCell = ex871Presc
       ? '<span class="tag prescribed">처방완료</span>'
       : (p.isEx871Target ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>');
@@ -1650,10 +1668,11 @@ function renderWardPatientTable(ward) {
       : '<span class="tag norecommend">—</span>';
 
     const showReasonInput = p.isRecommended && unpresc;
+    const isViewingHistory = !!state.viewingDate;
 
-    tbody.innerHTML += `<tr class="${rowClass}">
+    tbody.innerHTML += `<tr class="${rowClass}" id="ptrow-${p.id}">
       <td>${p.id}</td>
-      <td><strong>${p.name}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 처방필요</span>':''}</td>
+      <td><strong>${p.name}</strong>${showReasonInput && !isConfirmed?'<br><span class="unpresc-badge">⚠ 처방필요</span>':(isConfirmed?'<br><span class="confirm-badge">✅ 확인완료</span>':'')}</td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
       <td style="color:${p.days<=3?'var(--success)':'inherit'}">${p.days}일</td>
@@ -1664,9 +1683,23 @@ function renderWardPatientTable(ward) {
       <td>${e6Cell}</td>
       <td>
         ${showReasonInput?`
-          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${state.viewingDate?'disabled':''}>
-          <button class="save-btn" onclick="saveReason('${p.id}')" ${state.viewingDate?'disabled':''}>저장</button>
+          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${isViewingHistory?'disabled':''}>
+          <button class="save-btn" onclick="saveReason('${p.id}')" ${isViewingHistory?'disabled':''}>저장</button>
         `:(savedReason?`<span style="font-size:11px;color:var(--muted)">${savedReason}</span>`:'<span style="color:var(--muted);font-size:11px">—</span>')}
+      </td>
+      <td>
+        <div class="confirm-wrap">
+          <input type="checkbox" class="confirm-check" id="conf-${p.id}"
+            ${isConfirmed ? 'checked' : ''}
+            ${isViewingHistory ? 'disabled' : ''}
+            onchange="toggleConfirm('${p.id}', this.checked)">
+          <input type="text" class="confirm-note" id="confnote-${p.id}"
+            placeholder="확인 내용 입력…"
+            value="${conf.note || ''}"
+            ${isViewingHistory ? 'disabled' : ''}
+            oninput="state.confirmations['${p.id}']={checked:${isConfirmed},note:this.value}">
+          <button class="save-btn" onclick="saveConfirmation('${p.id}')" ${isViewingHistory?'disabled':''}>저장</button>
+        </div>
       </td>
     </tr>`;
   });
@@ -1711,6 +1744,45 @@ function renderWardPrescribedAnyTable(ward) {
       <td><span style="color:var(--muted);font-size:11px">—</span></td>
     </tr>`;
   });
+}
+
+function toggleConfirm(id, checked) {
+  if (state.viewingDate) return;
+  const note = document.getElementById(`confnote-${id}`)?.value || '';
+  state.confirmations[id] = { checked, note };
+  // 행 스타일 즉시 갱신
+  const row = document.getElementById(`ptrow-${id}`);
+  if (row) {
+    row.classList.toggle('confirmed-row', checked);
+    const nameTd = row.querySelector('td:nth-child(2)');
+    if (nameTd) {
+      const badgeEl = nameTd.querySelector('.confirm-badge, .unpresc-badge');
+      if (badgeEl) badgeEl.remove();
+      if (checked) {
+        nameTd.innerHTML += '<br><span class="confirm-badge">✅ 확인완료</span>';
+      }
+    }
+  }
+}
+
+function saveConfirmation(id) {
+  if (state.viewingDate) {
+    showToast('⚠ 과거 데이터는 수정할 수 없습니다');
+    return;
+  }
+  const checked = document.getElementById(`conf-${id}`)?.checked ?? false;
+  const note = document.getElementById(`confnote-${id}`)?.value || '';
+  state.confirmations[id] = { checked, note };
+  try {
+    localStorage.setItem('hosp_confirmations', JSON.stringify(state.confirmations));
+  } catch(e) {}
+  // Firebase에도 저장
+  fetch(`${FIREBASE_DB_URL}/dashboard/daily/confirmations.json`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [id]: { checked, note } }),
+  }).catch(() => {});
+  showToast('✅ 확인 내용이 저장되었습니다');
 }
 
 function saveReason(id) {
