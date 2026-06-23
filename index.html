@@ -161,15 +161,25 @@
   .tag.norecommend { background: var(--surface2); color: var(--muted); }
 
   .reason-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px;
-  .confirm-wrap { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .confirm-check { width:18px; height:18px; cursor:pointer; accent-color: var(--success); flex-shrink:0; }
-  .confirm-note { flex:1; min-width:100px; padding:4px 8px; border:1px solid var(--border); border-radius:6px;
-    font-size:11.5px; background:var(--surface2); color:var(--text); }
-  .confirm-note:focus { outline:none; border-color:var(--success); }
-  .confirm-note:disabled { opacity:.5; }
-  .confirmed-row td { background: rgba(47,158,99,.07) !important; }
-  .confirm-badge { font-size:10px; background:#e8f7ef; color:var(--success); border:1px solid #b2dfc8;
-    border-radius:5px; padding:2px 6px; font-weight:600; white-space:nowrap; }
+  .ward-confirm-label {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 20px; border-radius: 12px; cursor: pointer;
+    border: 2px solid var(--warn); background: #fff8ee;
+    transition: all .2s; user-select: none;
+  }
+  .ward-confirm-label:hover { background: #fff0d0; }
+  .ward-confirm-label.ward-confirm-done {
+    border-color: var(--success); background: #edfaf3;
+  }
+  .ward-confirm-label input[type=checkbox] {
+    width: 22px; height: 22px; cursor: pointer;
+    accent-color: var(--success); flex-shrink: 0;
+  }
+  .ward-confirm-text {
+    font-size: 15px; font-weight: 800; color: var(--warn); letter-spacing: -0.3px;
+  }
+  .ward-confirm-done .ward-confirm-text { color: var(--success); }
+  .ward-confirm-label[disabled], .ward-confirm-label input:disabled { cursor: not-allowed; opacity: .6; }
     padding: 5px 8px; font-size: 11.5px; width: 150px; outline: none; font-family: var(--font); }
   .reason-input:focus { border-color: var(--warn); }
   .save-btn { background: var(--warn); color: #fff; border: none; border-radius: 6px; padding: 4px 9px; font-size: 10.5px; font-weight: 700; cursor: pointer; margin-left: 5px; }
@@ -1562,9 +1572,25 @@ function toggleWardAccordion(ward) {
 // ═══════════════════════════════════════════════════════════
 function renderWardAccordion(ward, panel) {
   const allTargets = getAllMatchedPatients().filter(p => p.ward === ward);
+  const wardConf = state.confirmations[`ward_${ward}`] || { checked: false };
+  const dateLabel = state.uploadDate
+    ? (() => { const p=state.uploadDate.split('.'); return p.length>=3?`${parseInt(p[1])}월 ${parseInt(p[2])}일`:state.uploadDate; })()
+    : '오늘';
+  const isViewingHistory = !!state.viewingDate;
+
   panel.innerHTML = `
     <div class="accordion-header">
       <div class="accordion-title">${ward} 처방 대상 환자 명단</div>
+      <label id="wardConfLabel-${ward}" class="ward-confirm-label ${wardConf.checked?'ward-confirm-done':''}"
+        onclick="event.stopPropagation()">
+        <input type="checkbox" id="wardConf-${ward}"
+          ${wardConf.checked ? 'checked' : ''}
+          ${isViewingHistory ? 'disabled' : ''}
+          onchange="toggleWardConfirm('${ward}', this.checked)">
+        <span class="ward-confirm-text">
+          ${wardConf.checked ? '✅' : '☐'} ${dateLabel}자 처방 권고 대상 환자 확인 완료
+        </span>
+      </label>
       <button class="accordion-close" onclick="event.stopPropagation(); toggleWardAccordion('${ward}')">✕ 닫기</button>
     </div>
     <div class="accordion-body">
@@ -1580,7 +1606,7 @@ function renderWardAccordion(ward, panel) {
       <div class="table-scroll">
         <table class="pt-table">
           <thead>
-            <tr><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>재원일수</th><th>급종</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th><th style="min-width:160px">✅ 확인</th></tr>
+            <tr><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>재원일수</th><th>급종</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
           </thead>
           <tbody id="ptTableBody-${ward}"></tbody>
         </table>
@@ -1672,7 +1698,7 @@ function renderWardPatientTable(ward) {
 
     tbody.innerHTML += `<tr class="${rowClass}" id="ptrow-${p.id}">
       <td>${p.id}</td>
-      <td><strong>${p.name}</strong>${showReasonInput && !isConfirmed?'<br><span class="unpresc-badge">⚠ 처방필요</span>':(isConfirmed?'<br><span class="confirm-badge">✅ 확인완료</span>':'')}</td>
+      <td><strong>${p.name}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 처방필요</span>':''}</td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
       <td style="color:${p.days<=3?'var(--success)':'inherit'}">${p.days}일</td>
@@ -1686,20 +1712,6 @@ function renderWardPatientTable(ward) {
           <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${isViewingHistory?'disabled':''}>
           <button class="save-btn" onclick="saveReason('${p.id}')" ${isViewingHistory?'disabled':''}>저장</button>
         `:(savedReason?`<span style="font-size:11px;color:var(--muted)">${savedReason}</span>`:'<span style="color:var(--muted);font-size:11px">—</span>')}
-      </td>
-      <td>
-        <div class="confirm-wrap">
-          <input type="checkbox" class="confirm-check" id="conf-${p.id}"
-            ${isConfirmed ? 'checked' : ''}
-            ${isViewingHistory ? 'disabled' : ''}
-            onchange="toggleConfirm('${p.id}', this.checked)">
-          <input type="text" class="confirm-note" id="confnote-${p.id}"
-            placeholder="확인 내용 입력…"
-            value="${conf.note || ''}"
-            ${isViewingHistory ? 'disabled' : ''}
-            oninput="state.confirmations['${p.id}']={checked:${isConfirmed},note:this.value}">
-          <button class="save-btn" onclick="saveConfirmation('${p.id}')" ${isViewingHistory?'disabled':''}>저장</button>
-        </div>
       </td>
     </tr>`;
   });
@@ -1746,43 +1758,25 @@ function renderWardPrescribedAnyTable(ward) {
   });
 }
 
-function toggleConfirm(id, checked) {
+function toggleWardConfirm(ward, checked) {
   if (state.viewingDate) return;
-  const note = document.getElementById(`confnote-${id}`)?.value || '';
-  state.confirmations[id] = { checked, note };
-  // 행 스타일 즉시 갱신
-  const row = document.getElementById(`ptrow-${id}`);
-  if (row) {
-    row.classList.toggle('confirmed-row', checked);
-    const nameTd = row.querySelector('td:nth-child(2)');
-    if (nameTd) {
-      const badgeEl = nameTd.querySelector('.confirm-badge, .unpresc-badge');
-      if (badgeEl) badgeEl.remove();
-      if (checked) {
-        nameTd.innerHTML += '<br><span class="confirm-badge">✅ 확인완료</span>';
-      }
-    }
-  }
-}
-
-function saveConfirmation(id) {
-  if (state.viewingDate) {
-    showToast('⚠ 과거 데이터는 수정할 수 없습니다');
-    return;
-  }
-  const checked = document.getElementById(`conf-${id}`)?.checked ?? false;
-  const note = document.getElementById(`confnote-${id}`)?.value || '';
-  state.confirmations[id] = { checked, note };
-  try {
-    localStorage.setItem('hosp_confirmations', JSON.stringify(state.confirmations));
-  } catch(e) {}
-  // Firebase에도 저장
+  state.confirmations[`ward_${ward}`] = { checked, confirmedAt: Date.now() };
+  // 라벨 스타일 즉시 갱신
+  const label = document.getElementById(`wardConfLabel-${ward}`);
+  const textEl = label?.querySelector('.ward-confirm-text');
+  if (label) label.classList.toggle('ward-confirm-done', checked);
+  const dateLabel = state.uploadDate
+    ? (() => { const p=state.uploadDate.split('.'); return p.length>=3?`${parseInt(p[1])}월 ${parseInt(p[2])}일`:state.uploadDate; })()
+    : '오늘';
+  if (textEl) textEl.textContent = `${checked?'✅':'☐'} ${dateLabel}자 처방 권고 대상 환자 확인 완료`;
+  // 저장
+  try { localStorage.setItem('hosp_confirmations', JSON.stringify(state.confirmations)); } catch(e) {}
   fetch(`${FIREBASE_DB_URL}/dashboard/daily/confirmations.json`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [id]: { checked, note } }),
+    body: JSON.stringify({ [`ward_${ward}`]: { checked, confirmedAt: Date.now() } }),
   }).catch(() => {});
-  showToast('✅ 확인 내용이 저장되었습니다');
+  showToast(checked ? `✅ ${ward} 확인 완료로 표시되었습니다` : `${ward} 확인이 해제되었습니다`);
 }
 
 function saveReason(id) {
