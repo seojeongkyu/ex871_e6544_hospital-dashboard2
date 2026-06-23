@@ -369,8 +369,17 @@
   </div>
 
   <div class="ref-banner" id="refBanner" style="display:none">
-    <span>📋 기준표 로드됨: EX871 <strong id="refExCount">0</strong>개 상병 · E6544 <strong id="refE6Count">0</strong>개 상병</span>
-    <button class="upload-btn secondary" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('refInput').click()">기준표 다시 업로드</button>
+    <div style="line-height:1.7;font-size:12.5px;">
+      <strong style="font-size:13px;">📋 건강보험 수가별 적용 지침</strong><br>
+      <span style="color:var(--accent2)">■ [E6544] L270097</span>
+      <strong>(Hicardi) Bed side monitoring (1일당, 18,568원)</strong>:
+      EKG 모니터링 필요 환자, 수술·시술·진정·항암 환자,
+      <span style="color:var(--warn);font-weight:600;">70세 이상 (재원 5일 이내)</span> 환자에게 1일당 적용<br>
+      <span style="color:var(--accent)">■ [EX871] L270098</span>
+      <strong>(Hicardi-II) 원격심박기술-심전도감시 (1일당, 43,714원)</strong>:
+      심장질환 입원, 부정맥·심부전 일반 환자, CAG 시술 환자에게 1일당 적용
+    </div>
+    <button class="upload-btn secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="document.getElementById('refInput').click()">기준표 다시 업로드</button>
   </div>
 
   <div class="ref-banner" id="historyBanner" style="display:none; background:#fff4e0; border-color:#f0d28a;">
@@ -1310,7 +1319,7 @@ function initDashboard() {
   const historyBanner = document.getElementById('historyBanner');
   if (state.viewingDate) {
     historyBanner.style.display = 'flex';
-    document.getElementById('historyBannerText').textContent = `📅 과거 데이터를 보고 있습니다 — ${state.uploadDate} 기준 (실시간 데이터 아님, 수정 불가)`;
+    document.getElementById('historyBannerText').textContent = `📅 과거 데이터를 보고 있습니다 — ${state.uploadDate}${state.uploadTimeLabel ? ' ' + state.uploadTimeLabel : ''} 기준 (실시간 데이터 아님, 수정 불가)`;
   } else {
     historyBanner.style.display = 'none';
   }
