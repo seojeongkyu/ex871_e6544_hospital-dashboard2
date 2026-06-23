@@ -1606,7 +1606,7 @@ function renderWardAccordion(ward, panel) {
       <div class="table-scroll">
         <table class="pt-table">
           <thead>
-            <tr><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>재원일수</th><th>급종</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
+            <tr><th>병실</th><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>주치의</th><th>재원일수</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
           </thead>
           <tbody id="ptTableBody-${ward}"></tbody>
         </table>
@@ -1667,7 +1667,7 @@ function renderWardPatientTable(ward) {
   tbody.innerHTML = '';
 
   if (!pts.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">해당 조건의 환자가 없습니다</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">해당 조건의 환자가 없습니다</td></tr>`;
     return;
   }
 
@@ -1697,12 +1697,13 @@ function renderWardPatientTable(ward) {
     const isViewingHistory = !!state.viewingDate;
 
     tbody.innerHTML += `<tr class="${rowClass}" id="ptrow-${p.id}">
+      <td style="white-space:nowrap">${p.room||'—'}</td>
       <td>${p.id}</td>
       <td><strong>${p.name}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 처방필요</span>':''}</td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
+      <td style="white-space:nowrap">${p.doctor||'—'}</td>
       <td style="color:${p.days<=3?'var(--success)':'inherit'}">${p.days}일</td>
-      <td>${insTag}</td>
       <td style="max-width:200px"><span style="font-size:11.5px">${p.disease}</span></td>
       <td>${recCell}</td>
       <td>${exCell}</td>
@@ -1732,23 +1733,23 @@ function renderWardPrescribedAnyTable(ward) {
   tbody.innerHTML = '';
 
   if (!pts.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">처방받은 환자가 없습니다</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">처방받은 환자가 없습니다</td></tr>`;
     return;
   }
 
   pts.forEach(p => {
-    const insTag = p.insSimple==='자보' ? `<span class="tag car">자보</span>` : (p.insSimple==='건강보험' ? `<span class="tag insurance">건강보험</span>` : `<span class="tag none">${p.insSimple}</span>`);
     const exCell = p.gotEx871 ? '<span class="tag prescribed">처방완료</span>' : '<span class="tag none">—</span>';
     const e6Cell = p.gotE6544 ? '<span class="tag prescribed">처방완료</span>' : '<span class="tag none">—</span>';
     const recCell = p.meetsRecCond ? '<span class="tag recommend">✅ 권고조건 충족</span>' : '<span class="tag norecommend">조건 외(나이/보험/재원일수)</span>';
 
     tbody.innerHTML += `<tr class="prescribed-row">
+      <td style="white-space:nowrap">${p.room||'—'}</td>
       <td>${p.id}</td>
       <td><strong>${p.name}</strong></td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
+      <td style="white-space:nowrap">${p.doctor||'—'}</td>
       <td>${p.days}일</td>
-      <td>${insTag}</td>
       <td style="max-width:200px"><span style="font-size:11.5px">${p.disease}</span></td>
       <td>${recCell}</td>
       <td>${exCell}</td>
