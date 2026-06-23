@@ -996,8 +996,7 @@ function dedupeByName(rows) {
 function updateRefBanner() {
   const has = state.ex871Ref.length || state.e6544Ref.length;
   document.getElementById('refBanner').style.display = has ? 'flex' : 'none';
-  document.getElementById('refExCount').textContent = state.ex871Ref.length;
-  document.getElementById('refE6Count').textContent = state.e6544Ref.length;
+  // refExCount / refE6Count 요소는 수가 지침 배너로 교체되어 더 이상 존재하지 않음
   if (has) {
     document.getElementById('statusDotEl').className = 'status-dot warn';
     document.getElementById('statusText').textContent = '기준표 OK — 오늘자 데이터 대기중';
