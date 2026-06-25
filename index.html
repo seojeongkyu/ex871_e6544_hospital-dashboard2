@@ -553,6 +553,18 @@ let state = {
 const ADMIN_PIN = '9780';
 const PRESC_CODE_MAP = { 'L270098': 'EX871', 'L270097': 'E6544' };
 
+// 이름 마스킹: 홍길동 → 홍O동, 김O (2글자), 홍OO연 (4글자 이상)
+function maskName(name) {
+  if (!name) return '—';
+  const n = name.trim();
+  if (n.length <= 1) return n;
+  if (n.length === 2) return n[0] + 'O';
+  // 3글자: 첫+O+끝
+  // 4글자 이상: 첫+중간 O...+끝
+  const mid = 'O'.repeat(n.length - 2);
+  return n[0] + mid + n[n.length - 1];
+}
+
 // ═══════════════════════════════════════════════════════════
 // 접근 제어 — 원내 IP 자동 통과 / 외부 접속 시 코드 요구
 // ═══════════════════════════════════════════════════════════
@@ -1606,7 +1618,7 @@ function renderWardAccordion(ward, panel) {
       <div class="table-scroll">
         <table class="pt-table">
           <thead>
-            <tr><th>병실</th><th>등록번호</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>주치의</th><th>재원일수</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
+            <tr><th>병실</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>주치의</th><th>재원일수</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
           </thead>
           <tbody id="ptTableBody-${ward}"></tbody>
         </table>
@@ -1654,7 +1666,7 @@ function renderWardPatientTable(ward) {
 
   if (tab==='recommend') pts = pts.filter(p=>p.isRecommended);
   if (tab==='unprescribed') pts = pts.filter(p=>p.isRecommended && !isPrescribed(p));
-  if (search) pts = pts.filter(p=>p.name.toLowerCase().includes(search)||p.id.includes(search));
+  if (search) pts = pts.filter(p=>maskName(p.name).toLowerCase().includes(search)||p.room?.includes(search));
 
   pts.sort((a,b) => {
     // 1순위: 추가 권고 대상자(미처방+권고대상) 먼저, 2순위: 금일 처방완료 환자, 3순위: 권고대상 아닌 환자
@@ -1698,8 +1710,7 @@ function renderWardPatientTable(ward) {
 
     tbody.innerHTML += `<tr class="${rowClass}" id="ptrow-${p.id}">
       <td style="white-space:nowrap">${p.room||'—'}</td>
-      <td>${p.id}</td>
-      <td><strong>${p.name}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 처방필요</span>':''}</td>
+      <td><strong>${maskName(p.name)}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 처방필요</span>':''}</td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
       <td style="white-space:nowrap">${p.doctor||'—'}</td>
@@ -1723,7 +1734,7 @@ function renderWardPrescribedAnyTable(ward) {
   let pts = getWardPrescribedAny(ward);
   const searchEl = document.getElementById(`ptSearch-${ward}`);
   const search = searchEl ? searchEl.value.toLowerCase() : '';
-  if (search) pts = pts.filter(p=>p.name.toLowerCase().includes(search)||p.id.includes(search));
+  if (search) pts = pts.filter(p=>maskName(p.name).toLowerCase().includes(search)||p.room?.includes(search));
 
   // 권고대상 조건 충족 환자 먼저
   pts.sort((a,b) => (b.meetsRecCond?1:0) - (a.meetsRecCond?1:0));
@@ -1744,8 +1755,7 @@ function renderWardPrescribedAnyTable(ward) {
 
     tbody.innerHTML += `<tr class="prescribed-row">
       <td style="white-space:nowrap">${p.room||'—'}</td>
-      <td>${p.id}</td>
-      <td><strong>${p.name}</strong></td>
+      <td><strong>${maskName(p.name)}</strong></td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
       <td style="white-space:nowrap">${p.doctor||'—'}</td>
