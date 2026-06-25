@@ -1218,7 +1218,7 @@ function parsePatientSheet(rows, header) {
     return {
       id: String(r[idIdx]).trim(), name: String(r[nameIdx]||'').trim(),
       sa, sex: sex||'', age,
-      room: String(r[wardIdx]||'').trim(), ward: inferWard(r[wardIdx]), dept: String(r[deptIdx]||'').trim(),
+      room: String(r[wardIdx]||'').trim(), ward: normalizeWard(inferWard(r[wardIdx])), dept: String(r[deptIdx]||'').trim(),
       doctor: String(r[docIdx]||'').trim(), disease: String(r[diseaseIdx]||'').trim(),
       insType: insRaw, insSimple: simplifyInsurance(insRaw),
       days: parseInt(r[daysIdx]) || 0, visitCount: parseInt(r[visitIdx]) || 0,
@@ -1506,6 +1506,12 @@ function renderWardMonthChart() {
   });
 }
 
+// 병동명 정규화 — 시스템별 표기 차이 통일
+function normalizeWard(ward) {
+  const MAP = { '51병동': 'ICU' };
+  return MAP[ward] || ward;
+}
+
 async function renderWardMonthDashboard() {
   const monthFromHistory = {};
   try {
@@ -1523,10 +1529,12 @@ async function renderWardMonthDashboard() {
           const patients = ptsRes.ok ? (await ptsRes.json()||[]) : [];
           const prescs   = rxRes.ok  ? (await rxRes.json()||[])  : [];
           const patWard = {};
-          patients.forEach(p => { patWard[p.id] = p.ward; });
+          patients.forEach(p => { patWard[p.id] = normalizeWard(p.ward); });
           if (!monthFromHistory[mo]) monthFromHistory[mo] = {};
           prescs.forEach(px => {
-            const ward = patWard[px.patientId] || '기타';
+            const raw = patWard[px.patientId];
+            if (!raw) return; // 병동 미상(퇴원 등) → 기타로 분류하지 않고 제외
+            const ward = normalizeWard(raw);
             if (!monthFromHistory[mo][ward]) monthFromHistory[mo][ward] = {ex871:0,e6544:0,total:0};
             if (px.type==='EX871') monthFromHistory[mo][ward].ex871++;
             else if (px.type==='E6544') monthFromHistory[mo][ward].e6544++;
@@ -1681,11 +1689,11 @@ function getWardSummaries() {
   const allTargets = getAllMatchedPatients();
   const wards = {};
   allTargets.forEach(p => {
-    if (!wards[p.ward]) wards[p.ward] = { total:0, recTotal:0, recUnprescribed:0, recPrescribed:0, totalPrescribedAny:0, patientCount:0, prescRowCount:0 };
-    wards[p.ward].total++;
+    if (!wards[normalizeWard(p.ward)]) wards[normalizeWard(p.ward)] = { total:0, recTotal:0, recUnprescribed:0, recPrescribed:0, totalPrescribedAny:0, patientCount:0, prescRowCount:0 };
+    wards[normalizeWard(p.ward)].total++;
     if (p.isRecommended) {
-      wards[p.ward].recTotal++;
-      isPrescribed(p) ? wards[p.ward].recPrescribed++ : wards[p.ward].recUnprescribed++;
+      wards[normalizeWard(p.ward)].recTotal++;
+      isPrescribed(p) ? wards[normalizeWard(p.ward)].recPrescribed++ : wards[normalizeWard(p.ward)].recUnprescribed++;
     }
   });
 
@@ -1701,10 +1709,10 @@ function getWardSummaries() {
 
   state.patients.forEach(p => {
     if (allPrescIds.has(p.id)) {
-      ensureWard(p.ward).totalPrescribedAny += 1;
+      ensureWard(normalizeWard(p.ward)).totalPrescribedAny += 1;
     }
     // 재원환자수: 병동별 전체 입원중인 환자 수 (상병/나이 무관)
-    ensureWard(p.ward).patientCount += 1;
+    ensureWard(normalizeWard(p.ward)).patientCount += 1;
   });
 
   // 금일 하이카디 처방 건수(중복 포함, 엑셀 행 수 기준)
