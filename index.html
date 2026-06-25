@@ -161,7 +161,11 @@
   .tag.norecommend { background: var(--surface2); color: var(--muted); }
 
   .reason-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px;
-  .ward-confirm-label {
+  .ward-month-row { cursor:pointer; transition:background .15s; }
+  .ward-month-row:hover { background:rgba(47,127,214,.07); }
+  .ward-month-row.selected { background:rgba(47,127,214,.13); }
+  .ward-month-row.selected td:first-child { font-weight:800; color:var(--accent); }
+  .ward-select-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; border:2px solid #ccc; vertical-align:middle; }
     display: inline-flex; align-items: center; gap: 10px;
     padding: 10px 20px; border-radius: 12px; cursor: pointer;
     border: 2px solid var(--warn); background: #fff8ee;
@@ -492,25 +496,32 @@
 
       <!-- 병동별 월별 사용 현황 대시보드 -->
       <div class="card" style="margin-bottom:16px">
-        <div class="card-header">
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
           <div class="card-title">📊 병동별 월별 Hicardi 사용 현황</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <span style="font-size:11.5px;color:var(--muted)">1~5월: 실적자료 / 6월~: 처방 현황 합산</span>
-            <div style="display:flex;gap:4px">
-              <button id="wardMonthViewAll" onclick="setWardMonthView('all')" class="upload-btn secondary" style="padding:3px 10px;font-size:11.5px;background:var(--accent);color:#fff">전체</button>
-              <button id="wardMonthViewEx" onclick="setWardMonthView('ex871')" class="upload-btn secondary" style="padding:3px 10px;font-size:11.5px">EX871</button>
-              <button id="wardMonthViewE6" onclick="setWardMonthView('e6544')" class="upload-btn secondary" style="padding:3px 10px;font-size:11.5px">E6544</button>
-            </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted)">1~5월: 실적 / 6월~: 집계</span>
+            <span style="font-size:11px;color:var(--muted);border-left:1px solid var(--border);padding-left:8px">지표:</span>
+            <button id="wardMonthViewAll" onclick="setWardMonthView('all')" class="upload-btn secondary" style="padding:3px 12px;font-size:12px;background:var(--accent);color:#fff;border-color:var(--accent)">전체</button>
+            <button id="wardMonthViewEx" onclick="setWardMonthView('ex871')" class="upload-btn secondary" style="padding:3px 12px;font-size:12px">EX871</button>
+            <button id="wardMonthViewE6" onclick="setWardMonthView('e6544')" class="upload-btn secondary" style="padding:3px 12px;font-size:12px">E6544</button>
+            <span style="font-size:11px;color:var(--muted);border-left:1px solid var(--border);padding-left:8px">병동선택:</span>
+            <button onclick="selectAllWards(true)" class="upload-btn secondary" style="padding:3px 10px;font-size:11.5px">전체 선택</button>
+            <button onclick="selectAllWards(false)" class="upload-btn secondary" style="padding:3px 10px;font-size:11.5px">전체 해제</button>
           </div>
         </div>
-        <div class="table-scroll" style="max-height:340px">
-          <table class="ward-table" id="wardMonthTable">
-            <thead id="wardMonthThead"></thead>
-            <tbody id="wardMonthTbody"></tbody>
-          </table>
-        </div>
-        <div class="card-body" style="padding-top:0">
-          <div class="chart-wrap" style="height:300px"><canvas id="wardMonthChart"></canvas></div>
+        <div style="display:flex;gap:0">
+          <!-- 테이블 (클릭으로 병동 선택/해제) -->
+          <div class="table-scroll" style="flex:0 0 auto;max-height:420px;min-width:560px">
+            <table class="ward-table" id="wardMonthTable" style="font-size:12px">
+              <thead id="wardMonthThead"></thead>
+              <tbody id="wardMonthTbody"></tbody>
+            </table>
+          </div>
+          <!-- 꺾은선 그래프 -->
+          <div style="flex:1;min-width:0;padding:12px 8px">
+            <div id="wardChartHint" style="text-align:center;color:var(--muted);font-size:12.5px;padding:30px 0">← 왼쪽 표에서 병동을 클릭하면 꺾은선 그래프가 추가됩니다</div>
+            <canvas id="wardMonthChart" style="display:none"></canvas>
+          </div>
         </div>
       </div>
 
@@ -1345,22 +1356,158 @@ let wardChartInst = null;
 const WARD_HIST_DATA = {"05병동":{"1":{"total":0,"ex871":0,"e6544":0},"2":{"total":0,"ex871":0,"e6544":0},"3":{"total":0,"ex871":0,"e6544":0},"4":{"total":15,"ex871":9,"e6544":6},"5":{"total":43,"ex871":1,"e6544":42}},"06병동":{"1":{"total":0,"ex871":0,"e6544":0},"2":{"total":0,"ex871":0,"e6544":0},"3":{"total":0,"ex871":0,"e6544":0},"4":{"total":105,"ex871":65,"e6544":40},"5":{"total":122,"ex871":70,"e6544":52}},"07병동":{"1":{"total":5,"ex871":0,"e6544":5},"2":{"total":2,"ex871":0,"e6544":2},"3":{"total":2,"ex871":0,"e6544":2},"4":{"total":227,"ex871":28,"e6544":199},"5":{"total":243,"ex871":21,"e6544":222}},"08병동":{"1":{"total":15,"ex871":0,"e6544":15},"2":{"total":12,"ex871":0,"e6544":12},"3":{"total":4,"ex871":0,"e6544":4},"4":{"total":206,"ex871":7,"e6544":199},"5":{"total":265,"ex871":38,"e6544":227}},"09병동":{"1":{"total":11,"ex871":0,"e6544":11},"2":{"total":1,"ex871":0,"e6544":1},"3":{"total":2,"ex871":0,"e6544":2},"4":{"total":252,"ex871":74,"e6544":178},"5":{"total":279,"ex871":64,"e6544":215}},"10병동":{"1":{"total":13,"ex871":0,"e6544":13},"2":{"total":7,"ex871":0,"e6544":7},"3":{"total":18,"ex871":0,"e6544":18},"4":{"total":164,"ex871":0,"e6544":164},"5":{"total":221,"ex871":1,"e6544":220}},"11병동":{"1":{"total":9,"ex871":0,"e6544":9},"2":{"total":6,"ex871":0,"e6544":6},"3":{"total":2,"ex871":0,"e6544":2},"4":{"total":142,"ex871":94,"e6544":48},"5":{"total":169,"ex871":84,"e6544":85}},"12병동":{"1":{"total":56,"ex871":0,"e6544":56},"2":{"total":29,"ex871":0,"e6544":29},"3":{"total":47,"ex871":0,"e6544":47},"4":{"total":178,"ex871":144,"e6544":34},"5":{"total":164,"ex871":132,"e6544":32}},"13병동":{"1":{"total":15,"ex871":0,"e6544":15},"2":{"total":13,"ex871":0,"e6544":13},"3":{"total":11,"ex871":0,"e6544":11},"4":{"total":85,"ex871":30,"e6544":55},"5":{"total":98,"ex871":25,"e6544":73}},"ICU":{"1":{"total":0,"ex871":0,"e6544":0},"2":{"total":0,"ex871":0,"e6544":0},"3":{"total":0,"ex871":0,"e6544":0},"4":{"total":169,"ex871":169,"e6544":0},"5":{"total":488,"ex871":488,"e6544":0}},"ER":{"1":{"total":0,"ex871":0,"e6544":0},"2":{"total":0,"ex871":0,"e6544":0},"3":{"total":0,"ex871":0,"e6544":0},"4":{"total":1,"ex871":1,"e6544":0},"5":{"total":0,"ex871":0,"e6544":0}},"A7병동":{"1":{"total":2,"ex871":0,"e6544":2},"2":{"total":0,"ex871":0,"e6544":0},"3":{"total":0,"ex871":0,"e6544":0},"4":{"total":122,"ex871":97,"e6544":25},"5":{"total":121,"ex871":108,"e6544":13}},"A8병동":{"1":{"total":78,"ex871":0,"e6544":78},"2":{"total":62,"ex871":0,"e6544":62},"3":{"total":72,"ex871":0,"e6544":72},"4":{"total":173,"ex871":147,"e6544":26},"5":{"total":148,"ex871":130,"e6544":18}},"A9병동":{"1":{"total":60,"ex871":0,"e6544":60},"2":{"total":49,"ex871":0,"e6544":49},"3":{"total":45,"ex871":0,"e6544":45},"4":{"total":121,"ex871":74,"e6544":47},"5":{"total":148,"ex871":73,"e6544":75}},"AA병동":{"1":{"total":0,"ex871":0,"e6544":0},"2":{"total":0,"ex871":0,"e6544":0},"3":{"total":0,"ex871":0,"e6544":0},"4":{"total":167,"ex871":79,"e6544":88},"5":{"total":141,"ex871":52,"e6544":89}}};
 
 let wardMonthChartInst = null;
-let wardMonthViewMode = 'all'; // 'all' | 'ex871' | 'e6544'
+let wardMonthViewMode = 'all';
+let selectedWards = new Set();
+let _wardMonthData = null; // {combined, allMonths, allWards}
+
+const WARD_COLORS = ['#2f7fd6','#e05252','#2f9e6e','#e0a020','#9b59b6','#1abc9c','#c0392b','#f39c12','#3498db','#27ae60','#8e44ad','#16a085','#d35400','#2c3e50','#7f8c8d','#e74c3c','#e67e22','#2980b9'];
 
 function setWardMonthView(mode) {
   wardMonthViewMode = mode;
-  ['All','Ex','E6'].forEach(k => {
-    const btn = document.getElementById(`wardMonthView${k}`);
-    if (btn) btn.style.cssText = btn.style.cssText.replace(/background:[^;]+;color:[^;]+/,'');
+  document.getElementById('wardMonthViewAll').style.cssText = 'padding:3px 12px;font-size:12px;' + (mode==='all'?'background:var(--accent);color:#fff;border-color:var(--accent)':'');
+  document.getElementById('wardMonthViewEx').style.cssText  = 'padding:3px 12px;font-size:12px;' + (mode==='ex871'?'background:var(--accent);color:#fff;border-color:var(--accent)':'');
+  document.getElementById('wardMonthViewE6').style.cssText  = 'padding:3px 12px;font-size:12px;' + (mode==='e6544'?'background:var(--accent);color:#fff;border-color:var(--accent)':'');
+  renderWardMonthTable();
+  renderWardMonthChart();
+}
+
+function selectAllWards(selectAll) {
+  if (!_wardMonthData) return;
+  if (selectAll) _wardMonthData.allWards.forEach(w => selectedWards.add(w));
+  else selectedWards.clear();
+  renderWardMonthTable();
+  renderWardMonthChart();
+}
+
+function toggleWardMonthSelect(ward) {
+  if (selectedWards.has(ward)) selectedWards.delete(ward);
+  else selectedWards.add(ward);
+  // 행 스타일 즉시 갱신
+  const row = document.getElementById(`wardMonthRow-${ward.replace(/[^a-zA-Z0-9가-힣]/g,'_')}`);
+  if (row) row.classList.toggle('selected', selectedWards.has(ward));
+  const dot = document.getElementById(`wardMonthDot-${ward.replace(/[^a-zA-Z0-9가-힣]/g,'_')}`);
+  if (dot) {
+    const idx = _wardMonthData?.allWards.indexOf(ward) ?? 0;
+    dot.style.background = selectedWards.has(ward) ? WARD_COLORS[idx % WARD_COLORS.length] : 'transparent';
+    dot.style.borderColor = selectedWards.has(ward) ? WARD_COLORS[idx % WARD_COLORS.length] : '#ccc';
+  }
+  renderWardMonthChart();
+}
+
+function renderWardMonthTable() {
+  if (!_wardMonthData) return;
+  const { combined, allMonths, allWards } = _wardMonthData;
+  const vk = wardMonthViewMode;
+
+  const thead = document.getElementById('wardMonthThead');
+  const tbody = document.getElementById('wardMonthTbody');
+  if (!thead || !tbody) return;
+
+  thead.innerHTML = `<tr>
+    <th style="min-width:80px;position:sticky;left:0;background:#f3f8fc;z-index:1">병동</th>
+    ${allMonths.map((m,i) => `<th style="min-width:50px;text-align:right">${m}월${i<5?'<br><span style="font-size:9px;color:#aaa">실적</span>':'<br><span style="font-size:9px;color:var(--accent)">집계</span>'}</th>`).join('')}
+    <th style="min-width:52px;text-align:right;color:var(--accent)">합계</th>
+  </tr>`;
+
+  let totalRow = {}; allMonths.forEach(m => totalRow[m]=0);
+  let grandTotal = 0;
+  tbody.innerHTML = '';
+
+  allWards.forEach((w, idx) => {
+    const rowId = `wardMonthRow-${w.replace(/[^a-zA-Z0-9가-힣]/g,'_')}`;
+    const dotId = `wardMonthDot-${w.replace(/[^a-zA-Z0-9가-힣]/g,'_')}`;
+    const color = WARD_COLORS[idx % WARD_COLORS.length];
+    const isSel = selectedWards.has(w);
+    let rowTotal = 0;
+    const cells = allMonths.map(m => {
+      const d = combined[w][m];
+      const v = vk==='ex871'?d.ex871:vk==='e6544'?d.e6544:d.total;
+      totalRow[m] = (totalRow[m]||0) + v;
+      rowTotal += v;
+      grandTotal += v;
+      return `<td style="text-align:right;padding:5px 8px">${v||'—'}</td>`;
+    }).join('');
+    tbody.innerHTML += `<tr id="${rowId}" class="ward-month-row${isSel?' selected':''}" onclick="toggleWardMonthSelect('${w}')">
+      <td style="position:sticky;left:0;background:inherit;white-space:nowrap">
+        <span class="ward-select-dot" id="${dotId}" style="background:${isSel?color:'transparent'};border-color:${isSel?color:'#ccc'}"></span>
+        <strong>${w}</strong>
+      </td>
+      ${cells}
+      <td style="text-align:right;font-weight:700;color:var(--accent);padding:5px 8px">${rowTotal||'—'}</td>
+    </tr>`;
   });
-  const activeBtn = document.getElementById(`wardMonthView${mode==='all'?'All':mode==='ex871'?'Ex':'E6'}`);
-  if (activeBtn) { activeBtn.style.background='var(--accent)'; activeBtn.style.color='#fff'; }
-  renderWardMonthDashboard(window._wardMonthCombined);
+
+  const totalCells = allMonths.map(m => `<td style="text-align:right;font-weight:700;padding:5px 8px">${totalRow[m]||'—'}</td>`).join('');
+  tbody.innerHTML += `<tr style="border-top:2px solid var(--border);background:var(--surface2)">
+    <td style="position:sticky;left:0;background:var(--surface2)"><strong>합계</strong></td>
+    ${totalCells}
+    <td style="text-align:right;font-weight:800;color:var(--accent);padding:5px 8px">${grandTotal}</td>
+  </tr>`;
+}
+
+function renderWardMonthChart() {
+  const canvas = document.getElementById('wardMonthChart');
+  const hint = document.getElementById('wardChartHint');
+  if (!canvas || !_wardMonthData) return;
+
+  if (selectedWards.size === 0) {
+    canvas.style.display = 'none';
+    if (hint) hint.style.display = 'block';
+    if (wardMonthChartInst) { wardMonthChartInst.destroy(); wardMonthChartInst = null; }
+    return;
+  }
+
+  canvas.style.display = 'block';
+  canvas.style.height = '320px';
+  if (hint) hint.style.display = 'none';
+
+  const { combined, allMonths, allWards } = _wardMonthData;
+  const vk = wardMonthViewMode;
+  const monthLabels = allMonths.map(m => `${m}월`);
+
+  if (wardMonthChartInst) wardMonthChartInst.destroy();
+  wardMonthChartInst = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: monthLabels,
+      datasets: [...selectedWards].map(w => {
+        const idx = allWards.indexOf(w);
+        const color = WARD_COLORS[idx % WARD_COLORS.length];
+        return {
+          label: w,
+          data: allMonths.map(m => { const d=combined[w][m]; return vk==='ex871'?d.ex871:vk==='e6544'?d.e6544:d.total; }),
+          borderColor: color,
+          backgroundColor: color + '22',
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: false,
+        };
+      })
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { labels:{ color:'#6b8299', font:{size:11}, boxWidth:14 } },
+        tooltip: { callbacks: {
+          title: items => `${items[0].label} (${vk==='ex871'?'EX871':vk==='e6544'?'E6544':'전체'})`,
+          footer: items => items.length>1 ? `합계: ${items.reduce((s,i)=>s+i.raw,0)}건` : ''
+        }}
+      },
+      scales: {
+        x: { ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
+        y: { beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
+             title:{display:true, text:'처방 건수', color:'#6b8299', font:{size:11}} }
+      }
+    }
+  });
 }
 
 async function renderWardMonthDashboard() {
-  // 6월 이후 데이터: Firebase history에서 처방 합산
-  const monthFromHistory = {}; // {month: {ward: {ex871, e6544, total}}}
+  const monthFromHistory = {};
   try {
     const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
     if (res.ok) {
@@ -1368,7 +1515,7 @@ async function renderWardMonthDashboard() {
       if (keys) {
         await Promise.all(Object.keys(keys).map(async dk => {
           const mo = parseInt(dk.slice(5,7), 10);
-          if (mo < 6) return; // 1~5월은 엑셀 실적 사용
+          if (mo < 6) return;
           const [ptsRes, rxRes] = await Promise.all([
             fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/patients.json`),
             fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/prescriptions.json`),
@@ -1390,16 +1537,11 @@ async function renderWardMonthDashboard() {
     }
   } catch(e) {}
 
-  // 전체 병동 목록
   const allWards = [...new Set([...Object.keys(WARD_HIST_DATA), ...Object.values(monthFromHistory).flatMap(m=>Object.keys(m))])].sort();
-
-  // 전체 월 목록
   const histMonths = ['1','2','3','4','5'];
   const liveMonths = [...new Set(Object.keys(monthFromHistory))].map(String).sort((a,b)=>a-b);
   const allMonths = [...histMonths, ...liveMonths.filter(m=>!histMonths.includes(m))];
-  const monthLabels = allMonths.map(m => `${m}월`);
 
-  // 합산 데이터 구조 {ward: {month: {total,ex871,e6544}}}
   const combined = {};
   allWards.forEach(w => {
     combined[w] = {};
@@ -1409,72 +1551,11 @@ async function renderWardMonthDashboard() {
       combined[w][m] = parseInt(m) <= 5 ? hist : live;
     });
   });
-  window._wardMonthCombined = combined;
 
-  // ── 테이블 렌더 ──
-  const thead = document.getElementById('wardMonthThead');
-  const tbody = document.getElementById('wardMonthTbody');
-  if (!thead || !tbody) return;
-
-  const vk = wardMonthViewMode; // 'all'|'ex871'|'e6544'
-  thead.innerHTML = `<tr><th style="min-width:70px">병동</th>${allMonths.map((m,i) => `<th style="min-width:56px">${m}월${i<5?'<br><span style="font-size:9px;color:#aaa">실적</span>':'<br><span style="font-size:9px;color:var(--accent)">집계</span>'}</th>`).join('')}<th>합계</th></tr>`;
-
-  tbody.innerHTML = '';
-  let totalRow = {};
-  allMonths.forEach(m => totalRow[m] = 0);
-  let grandTotal = 0;
-
-  allWards.forEach(w => {
-    let rowTotal = 0;
-    const cells = allMonths.map(m => {
-      const d = combined[w][m];
-      const v = vk==='ex871' ? d.ex871 : vk==='e6544' ? d.e6544 : d.total;
-      totalRow[m] = (totalRow[m]||0) + v;
-      rowTotal += v;
-      grandTotal += v;
-      const bg = v===0?'':'rgba(47,127,214,.06)';
-      return `<td style="text-align:right;padding:5px 8px;background:${bg}">${v||'—'}</td>`;
-    }).join('');
-    tbody.innerHTML += `<tr><td><strong>${w}</strong></td>${cells}<td style="text-align:right;font-weight:700;color:var(--accent);padding:5px 8px">${rowTotal||'—'}</td></tr>`;
-  });
-  const totalCells = allMonths.map(m => `<td style="text-align:right;font-weight:700;padding:5px 8px">${totalRow[m]||'—'}</td>`).join('');
-  tbody.innerHTML += `<tr style="border-top:2px solid var(--border);background:var(--surface2)"><td><strong>합계</strong></td>${totalCells}<td style="text-align:right;font-weight:800;color:var(--accent);padding:5px 8px">${grandTotal}</td></tr>`;
-
-  // ── 차트 렌더 ──
-  const COLORS = ['#2f7fd6','#e06c4a','#2f9e6e','#e0a020','#9b59b6','#1abc9c','#e74c3c','#f39c12','#3498db','#27ae60','#8e44ad','#16a085','#c0392b','#d35400','#2c3e50'];
-  if (wardMonthChartInst) wardMonthChartInst.destroy();
-  wardMonthChartInst = new Chart(document.getElementById('wardMonthChart'), {
-    type: 'bar',
-    data: {
-      labels: monthLabels,
-      datasets: allWards.map((w, i) => ({
-        label: w,
-        data: allMonths.map(m => {
-          const d = combined[w][m];
-          return vk==='ex871' ? d.ex871 : vk==='e6544' ? d.e6544 : d.total;
-        }),
-        backgroundColor: COLORS[i % COLORS.length] + 'cc',
-        borderRadius: 3,
-        stack: 'a',
-      }))
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position:'right', labels:{color:'#6b8299',font:{size:10},boxWidth:12} },
-        tooltip: {
-          callbacks: {
-            footer: items => `월 합계: ${items.reduce((s,i)=>s+i.raw,0)}`
-          }
-        }
-      },
-      scales: {
-        x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
-        y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
-             title:{display:true,text:'처방 건수',color:'#6b8299',font:{size:11}} }
-      }
-    }
-  });
+  _wardMonthData = { combined, allMonths, allWards };
+  selectedWards.clear();
+  renderWardMonthTable();
+  renderWardMonthChart();
 }
 
 function initDashboard() {
