@@ -525,6 +525,17 @@
         </div>
       </div>
 
+      <!-- 월별 병동별 처방 비교 차트 (EX871+E6544 누적 막대) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
+          <div class="card-title">📊 월별 병동별 처방 현황 (EX871 + E6544)</div>
+          <div id="wardBarMonthBtns" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrap" style="height:340px"><canvas id="wardBarChart"></canvas></div>
+        </div>
+      </div>
+
       <!-- 추이 그래프 영역 -->
       <div class="grid-2" id="trendSection" style="display:none">
         <div class="card">
@@ -1362,6 +1373,89 @@ let _wardMonthData = null; // {combined, allMonths, allWards}
 
 const WARD_COLORS = ['#2f7fd6','#e05252','#2f9e6e','#e0a020','#9b59b6','#1abc9c','#c0392b','#f39c12','#3498db','#27ae60','#8e44ad','#16a085','#d35400','#2c3e50','#7f8c8d','#e74c3c','#e67e22','#2980b9'];
 
+// 병동 표시 순서 (고정)
+const WARD_ORDER = ['05병동','06병동','07병동','08병동','09병동','10병동','11병동','12병동','13병동','A7병동','A8병동','A9병동','A10병동','ICU','ER'];
+
+let wardBarChartInst = null;
+let wardBarSelectedMonth = null; // null = 전체 합산
+
+function renderWardBarMonthButtons(allMonths) {
+  const container = document.getElementById('wardBarMonthBtns');
+  if (!container) return;
+  container.innerHTML = '';
+  const mkBtn = (label, month) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.className = 'upload-btn secondary';
+    const active = wardBarSelectedMonth === month;
+    btn.style.cssText = `padding:3px 10px;font-size:11.5px;${active?'background:var(--accent);color:#fff;border-color:var(--accent)':''}`;
+    btn.onclick = () => { wardBarSelectedMonth = month; renderWardBarMonthButtons(allMonths); renderWardBarChart(); };
+    container.appendChild(btn);
+  };
+  mkBtn('전체 합산', null);
+  allMonths.forEach(m => mkBtn(`${m}월`, m));
+}
+
+function renderWardBarChart() {
+  if (!_wardMonthData) return;
+  const { combined, allMonths } = _wardMonthData;
+
+  const dataWards = Object.keys(combined);
+  const orderedWards = [
+    ...WARD_ORDER.filter(w => dataWards.includes(w)),
+    ...dataWards.filter(w => !WARD_ORDER.includes(w)).sort(),
+  ];
+
+  const getVal = (w, type) => {
+    if (wardBarSelectedMonth !== null) {
+      const d = (combined[w]||{})[wardBarSelectedMonth] || {ex871:0,e6544:0};
+      return type==='ex871' ? d.ex871 : d.e6544;
+    }
+    return allMonths.reduce((sum, m) => {
+      const d = (combined[w]||{})[m] || {ex871:0,e6544:0};
+      return sum + (type==='ex871' ? d.ex871 : d.e6544);
+    }, 0);
+  };
+
+  const canvas = document.getElementById('wardBarChart');
+  if (!canvas) return;
+  if (wardBarChartInst) wardBarChartInst.destroy();
+  wardBarChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: orderedWards,
+      datasets: [
+        {
+          label: 'E6544 (L270097)',
+          data: orderedWards.map(w => getVal(w, 'e6544')),
+          backgroundColor: 'rgba(220,53,69,.82)',
+          borderRadius: { topLeft:4, topRight:4, bottomLeft:0, bottomRight:0 },
+          stack: 'a',
+        },
+        {
+          label: 'EX871 (L270098)',
+          data: orderedWards.map(w => getVal(w, 'ex871')),
+          backgroundColor: 'rgba(47,127,214,.82)',
+          borderRadius: { topLeft:0, topRight:0, bottomLeft:4, bottomRight:4 },
+          stack: 'a',
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels:{ color:'#6b8299', font:{size:12} } },
+        tooltip: { callbacks: { footer: items => `합계: ${items.reduce((s,i)=>s+i.raw,0)}건` } }
+      },
+      scales: {
+        x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
+        y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
+             title:{display:true, text:'처방 건수', color:'#6b8299', font:{size:11}} }
+      }
+    }
+  });
+}
+
 function setWardMonthView(mode) {
   wardMonthViewMode = mode;
   document.getElementById('wardMonthViewAll').style.cssText = 'padding:3px 12px;font-size:12px;' + (mode==='all'?'background:var(--accent);color:#fff;border-color:var(--accent)':'');
@@ -1562,6 +1656,9 @@ async function renderWardMonthDashboard() {
 
   _wardMonthData = { combined, allMonths, allWards };
   selectedWards.clear();
+  wardBarSelectedMonth = null;
+  renderWardBarMonthButtons(allMonths);
+  renderWardBarChart();
   renderWardMonthTable();
   renderWardMonthChart();
 }
