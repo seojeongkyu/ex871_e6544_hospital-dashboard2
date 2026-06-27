@@ -538,8 +538,12 @@
 
       <!-- 일별 처방 추이 (EX871+E6544 누적 막대) -->
       <div class="card" style="margin-bottom:16px">
-        <div class="card-header">
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
           <div class="card-title">📈 일별 처방 추이 (EX871 + E6544)</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted)">월 선택:</span>
+            <div id="trendMonthBtns" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+          </div>
           <span style="font-size:12px;color:var(--muted)" id="trendDailyLabel">처방 현황 데이터 기준</span>
         </div>
         <div class="card-body">
@@ -553,10 +557,10 @@
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
           <div class="card-title">⚙ 병동별 Hicardi 장비 보유 대비 가동률</div>
-          <span style="font-size:12px;color:var(--muted)">보유 200대 기준</span>
+          <span style="font-size:12px;color:var(--muted)" id="equipMonthLabel">6월 일평균 기준</span>
         </div>
         <div class="table-scroll">
-          <table class="ward-table"><thead><tr><th>병동</th><th>보유수량</th><th>처방중(가동)</th><th>대상환자수</th><th>가동률</th></tr></thead><tbody id="equipTableBody"></tbody></table>
+          <table class="ward-table"><thead><tr><th>병동</th><th>보유수량</th><th>일평균 EX871</th><th>일평균 E6544</th><th>일평균 합계</th><th>가동률</th></tr></thead><tbody id="equipTableBody"></tbody></table>
         </div>
       </div>
     </div>
@@ -2364,6 +2368,95 @@ function renderGlobalStats() {
 }
 
 let trendDailyInst = null;
+let _trendAllEntries = [];   // 전체 날짜별 집계 캐시
+let _trendSelectedMonth = null; // 선택된 월 (null=가장 최신월 자동)
+
+function renderTrendMonthButtons() {
+  const container = document.getElementById('trendMonthBtns');
+  if (!container || !_trendAllEntries.length) return;
+  // 데이터가 있는 월 목록 추출
+  const months = [...new Set(_trendAllEntries.map(e => parseInt(e.dateKey.slice(5,7),10)))].sort((a,b)=>a-b);
+  container.innerHTML = '';
+  months.forEach(m => {
+    const btn = document.createElement('button');
+    btn.textContent = `${m}월`;
+    btn.className = 'upload-btn secondary';
+    const active = _trendSelectedMonth === m;
+    btn.style.cssText = `padding:3px 10px;font-size:11.5px;${active?'background:var(--accent);color:#fff;border-color:var(--accent)':''}`;
+    btn.onclick = () => { _trendSelectedMonth = m; renderTrendMonthButtons(); renderTrendDailyChart(); };
+    container.appendChild(btn);
+  });
+}
+
+function renderTrendDailyChart() {
+  const loadingEl = document.getElementById('trendLoading');
+  const sectionEl = document.getElementById('trendSection');
+  if (!_trendAllEntries.length) return;
+
+  const mo = _trendSelectedMonth;
+  const filtered = mo ? _trendAllEntries.filter(e => parseInt(e.dateKey.slice(5,7),10) === mo) : _trendAllEntries;
+  if (!filtered.length) return;
+
+  const dayLabels = filtered.map(e => {
+    const p = e.uploadDate.split('.');
+    return p.length>=3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : e.dateKey.slice(5);
+  });
+  document.getElementById('trendDailyLabel').textContent =
+    `${dayLabels[0]} ~ ${dayLabels[dayLabels.length-1]} (${filtered.length}일)`;
+
+  if (trendDailyInst) trendDailyInst.destroy();
+  trendDailyInst = new Chart(document.getElementById('trendDailyChart'), {
+    type: 'bar',
+    data: {
+      labels: dayLabels,
+      datasets: [
+        {
+          label: 'E6544 (L270097)',
+          data: filtered.map(e => e.e6544 ?? 0),
+          backgroundColor: 'rgba(220,53,69,.82)',
+          borderRadius: { topLeft:4, topRight:4, bottomLeft:0, bottomRight:0 },
+          stack: 'a',
+        },
+        {
+          label: 'EX871 (L270098)',
+          data: filtered.map(e => e.ex871 ?? 0),
+          backgroundColor: 'rgba(47,127,214,.82)',
+          borderRadius: { topLeft:0, topRight:0, bottomLeft:4, bottomRight:4 },
+          stack: 'a',
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { labels:{ color:'#6b8299', font:{size:11} } },
+        tooltip: {
+          callbacks: {
+            title: items => `📅 ${items[0].label}`,
+            afterBody: items => {
+              const e = filtered[items[0].dataIndex];
+              const lines = [`합계: ${(e.ex871??0)+(e.e6544??0)}건`];
+              if (e.recTotal != null)
+                lines.push(`권고대상 ${e.recTotal}명 / 처방완료 ${e.recPrescribed}명 / 미처방 ${e.recUnprescribed}명`);
+              return lines;
+            },
+            label: () => '',
+          }
+        }
+      },
+      scales: {
+        x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
+        y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
+             title:{display:true, text:'처방 건수', color:'#6b8299', font:{size:11}} }
+      }
+    }
+  });
+
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (sectionEl) sectionEl.style.display = 'block';
+}
+
 async function renderTrendCharts() {
   const loadingEl = document.getElementById('trendLoading');
   const sectionEl = document.getElementById('trendSection');
@@ -2374,13 +2467,12 @@ async function renderTrendCharts() {
     const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
     if (!res.ok) throw new Error();
     const keys = await res.json();
-    if (!keys || Object.keys(keys).length < 1) {
+    if (!keys || !Object.keys(keys).length) {
       if (loadingEl) loadingEl.textContent = '📅 데이터가 누적되면 추이 그래프가 표시됩니다.';
       return;
     }
     const sortedKeys = Object.keys(keys).sort();
 
-    // 각 날짜의 EX871/E6544 집계
     const entries = await Promise.all(sortedKeys.map(async dk => {
       try {
         const [ssRes, udRes] = await Promise.all([
@@ -2392,86 +2484,100 @@ async function renderTrendCharts() {
           const ss = await ssRes.json();
           if (ss) return { dateKey:dk, uploadDate,
             ex871: ss.ex871Prescribed??0, e6544: ss.e6544Prescribed??0,
-            recTotal: ss.recTotal??0, recPrescribed: ss.recPrescribed??0, recUnprescribed: ss.recUnprescribed??0 };
+            recTotal: ss.recTotal??null, recPrescribed: ss.recPrescribed??null, recUnprescribed: ss.recUnprescribed??null,
+            wardBreakdown: ss.wardBreakdown||null };
         }
         // summaryStats 없으면 prescriptions에서 직접 집계
-        const rxRes = await fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/prescriptions.json`);
+        const [rxRes, ptsRes] = await Promise.all([
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/prescriptions.json`),
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/patients.json`),
+        ]);
         const prescs = rxRes.ok ? (await rxRes.json()||[]) : [];
+        const patients = ptsRes.ok ? (await ptsRes.json()||[]) : [];
+        const patWard = {}; patients.forEach(p => { patWard[p.id] = normalizeWard(p.ward); });
+        // 병동별 집계
+        const wb = {};
+        prescs.forEach(px => {
+          const w = normalizeWard(patWard[px.patientId]||''); if (!w) return;
+          if (!wb[w]) wb[w] = {ex871:0, e6544:0};
+          if (px.type==='EX871') wb[w].ex871++; else if (px.type==='E6544') wb[w].e6544++;
+        });
         const ex871 = new Set(prescs.filter(x=>x.type==='EX871').map(x=>x.patientId)).size;
         const e6544 = new Set(prescs.filter(x=>x.type==='E6544').map(x=>x.patientId)).size;
-        return { dateKey:dk, uploadDate, ex871, e6544, recTotal:null, recPrescribed:null, recUnprescribed:null };
+        return { dateKey:dk, uploadDate, ex871, e6544, recTotal:null, recPrescribed:null, recUnprescribed:null, wardBreakdown:wb };
       } catch(e) { return null; }
     }));
-    const valid = entries.filter(Boolean);
-    if (!valid.length) throw new Error('no data');
 
-    // 날짜 라벨 (M/D 형식)
-    const dayLabels = valid.map(e => {
-      const p = e.uploadDate.split('.');
-      return p.length>=3 ? `${parseInt(p[1])}/${parseInt(p[2])}` : e.dateKey.slice(5);
-    });
+    _trendAllEntries = entries.filter(Boolean);
+    if (!_trendAllEntries.length) throw new Error('no data');
 
-    if (valid.length >= 1) {
-      document.getElementById('trendDailyLabel').textContent =
-        `${dayLabels[0]} ~ ${dayLabels[dayLabels.length-1]}`;
-    }
+    // 가장 최신 월을 기본 선택
+    const months = [...new Set(_trendAllEntries.map(e => parseInt(e.dateKey.slice(5,7),10)))].sort((a,b)=>a-b);
+    _trendSelectedMonth = months[months.length-1]; // 최신 월
 
-    if (trendDailyInst) trendDailyInst.destroy();
-    trendDailyInst = new Chart(document.getElementById('trendDailyChart'), {
-      type: 'bar',
-      data: {
-        labels: dayLabels,
-        datasets: [
-          {
-            label: 'E6544 (L270097)',
-            data: valid.map(e => e.e6544 ?? 0),
-            backgroundColor: 'rgba(220,53,69,.82)',
-            borderRadius: { topLeft:4, topRight:4, bottomLeft:0, bottomRight:0 },
-            stack: 'a',
-          },
-          {
-            label: 'EX871 (L270098)',
-            data: valid.map(e => e.ex871 ?? 0),
-            backgroundColor: 'rgba(47,127,214,.82)',
-            borderRadius: { topLeft:0, topRight:0, bottomLeft:4, bottomRight:4 },
-            stack: 'a',
-          },
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode:'index', intersect:false },
-        plugins: {
-          legend: { labels:{ color:'#6b8299', font:{size:11} } },
-          tooltip: {
-            callbacks: {
-              title: items => `📅 ${items[0].label}`,
-              afterBody: items => {
-                const e = valid[items[0].dataIndex];
-                const total = (e.ex871??0) + (e.e6544??0);
-                const lines = [`합계: ${total}건`];
-                if (e.recTotal != null) {
-                  lines.push(`권고대상: ${e.recTotal}명 / 처방완료: ${e.recPrescribed}명 / 미처방: ${e.recUnprescribed}명`);
-                }
-                return lines;
-              },
-              label: () => '',
-            }
-          }
-        },
-        scales: {
-          x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
-          y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
-               title:{display:true, text:'처방 건수', color:'#6b8299', font:{size:11}} }
-        }
-      }
-    });
+    renderTrendMonthButtons();
+    renderTrendDailyChart();
 
-    if (loadingEl) loadingEl.style.display = 'none';
-    if (sectionEl) sectionEl.style.display = 'block';
+    // 가동률 테이블: 선택된 월(현재 최신월)의 병동별 일평균 계산
+    renderEquipTable();
+
   } catch(e) {
     if (loadingEl) loadingEl.textContent = '📅 데이터가 누적되면 추이 그래프가 표시됩니다.';
   }
+}
+
+function renderEquipTable() {
+  const equipBody = document.getElementById('equipTableBody');
+  const labelEl = document.getElementById('equipMonthLabel');
+  if (!equipBody || !_trendAllEntries.length) return;
+
+  const mo = _trendSelectedMonth;
+  const filtered = mo ? _trendAllEntries.filter(e => parseInt(e.dateKey.slice(5,7),10)===mo) : _trendAllEntries;
+  const dayCount = filtered.length || 1;
+  if (labelEl) labelEl.textContent = `${mo||''}월 일평균 기준 (${dayCount}일 데이터)`;
+
+  // 병동별 월 합산
+  const wardSum = {};
+  filtered.forEach(e => {
+    const wb = e.wardBreakdown;
+    if (!wb) return;
+    Object.entries(wb).forEach(([w, v]) => {
+      if (!wardSum[w]) wardSum[w] = {ex871:0, e6544:0};
+      wardSum[w].ex871 += v.ex871||0;
+      wardSum[w].e6544 += v.e6544||0;
+    });
+  });
+
+  const allWards = [...new Set([...Object.keys(EQUIPMENT_INVENTORY), ...Object.keys(wardSum)])];
+  const ordered = [...WARD_ORDER.filter(w=>allWards.includes(w)), ...allWards.filter(w=>!WARD_ORDER.includes(w)).sort()];
+
+  equipBody.innerHTML = '';
+  let totalInv=0, totalAvg=0;
+  ordered.forEach(w => {
+    const inv = EQUIPMENT_INVENTORY[w] || 0;
+    const sum = wardSum[w] || {ex871:0, e6544:0};
+    const avgEx = +(sum.ex871/dayCount).toFixed(1);
+    const avgE6 = +(sum.e6544/dayCount).toFixed(1);
+    const avgTotal = +((sum.ex871+sum.e6544)/dayCount).toFixed(1);
+    const pct = inv ? Math.min(100, Math.round(avgTotal/inv*100)) : 0;
+    const color = pct>=90?'var(--danger)':pct>=70?'var(--warn)':'var(--success)';
+    totalInv += inv; totalAvg += avgTotal;
+    equipBody.innerHTML += `<tr>
+      <td><strong>${w}</strong></td>
+      <td>${inv}대</td>
+      <td style="color:var(--accent)">${avgEx}</td>
+      <td style="color:var(--danger)">${avgE6}</td>
+      <td style="font-weight:700">${avgTotal}</td>
+      <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${pct}%;background:${color}"></div></div><span class="bar-pct">${pct}%</span></div></td>
+    </tr>`;
+  });
+  const totalPct = totalInv ? Math.min(100,Math.round(totalAvg/totalInv*100)) : 0;
+  equipBody.innerHTML += `<tr style="border-top:2px solid var(--border);background:var(--surface2)">
+    <td><strong>전체</strong></td><td><strong>${totalInv}대</strong></td>
+    <td colspan="2" style="color:var(--muted);font-size:11px">—</td>
+    <td style="font-weight:700">${totalAvg.toFixed(1)}</td>
+    <td><div class="bar-wrap"><div class="bar-bg2"><div class="bar-fill2" style="width:${totalPct}%;background:var(--accent)"></div></div><span class="bar-pct">${totalPct}%</span></div></td>
+  </tr>`;
 }
 
 // ═══════════════════════════════════════════════════════════
