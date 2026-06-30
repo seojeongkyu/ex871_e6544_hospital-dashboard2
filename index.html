@@ -536,6 +536,41 @@
         </div>
       </div>
 
+      <!-- 미처방 사유 현황 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
+          <div class="card-title">📋 미처방 사유 현황</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted)">월:</span>
+            <div id="reasonMonthBtns" style="display:flex;gap:4px;flex-wrap:wrap">
+              <button onclick="setReasonMonth('current')" id="reasonBtnCurrent"
+                class="upload-btn secondary"
+                style="padding:3px 10px;font-size:11.5px;background:var(--accent);color:#fff;border-color:var(--accent)">오늘</button>
+            </div>
+            <span style="font-size:11px;color:var(--muted);border-left:1px solid var(--border);padding-left:8px">병동:</span>
+            <select id="reasonWardFilter" onchange="renderReasonTable()"
+              style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:11.5px;color:var(--text);background:var(--surface2)">
+              <option value="">전체 병동</option>
+            </select>
+            <span id="reasonCount" style="font-size:11.5px;color:var(--muted)"></span>
+          </div>
+        </div>
+        <div class="table-scroll" style="max-height:400px">
+          <table class="ward-table" style="font-size:12px">
+            <thead><tr>
+              <th>병동</th><th>병실</th><th>환자명</th><th>성/연령</th>
+              <th>진료과</th><th>주치의</th><th>재원일수</th>
+              <th style="max-width:160px">상병명</th><th>권고</th>
+              <th>EX871</th><th>E6544</th>
+              <th style="min-width:180px">미처방 사유</th>
+            </tr></thead>
+            <tbody id="reasonTableBody">
+              <tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)">데이터 로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -1338,6 +1373,178 @@ function isPrescribed(p) {
 // INIT DASHBOARD
 // ═══════════════════════════════════════════════════════════
 let wardChartInst = null;
+
+// ═══════════════════════════════════════════════════════════
+// 미처방 사유 현황
+// ═══════════════════════════════════════════════════════════
+let _reasonMode = 'current';   // 'current' | 'YYYY-MM'
+let _reasonMonthData = null;   // 히스토리에서 불러온 {patients, prescriptions, reasons, uploadDate}
+
+async function initReasonSection() {
+  // 히스토리 월 버튼 생성
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
+    if (res.ok) {
+      const keys = await res.json();
+      if (keys) {
+        const months = [...new Set(Object.keys(keys).map(k=>k.slice(0,7)))].sort();
+        const btnContainer = document.getElementById('reasonMonthBtns');
+        if (btnContainer) {
+          months.forEach(ym => {
+            const [y, m] = ym.split('-');
+            const btn = document.createElement('button');
+            btn.textContent = `${parseInt(m)}월`;
+            btn.id = `reasonBtn_${ym}`;
+            btn.className = 'upload-btn secondary';
+            btn.style.cssText = 'padding:3px 10px;font-size:11.5px;';
+            btn.onclick = () => setReasonMonth(ym);
+            btnContainer.appendChild(btn);
+          });
+        }
+      }
+    }
+  } catch(e) {}
+
+  populateReasonWardFilter();
+  renderReasonTable();
+}
+
+function populateReasonWardFilter() {
+  const sel = document.getElementById('reasonWardFilter');
+  if (!sel) return;
+  const currentVal = sel.value;
+  // 병동 목록: 현재 state.patients 기준
+  const wards = [...new Set(state.patients.map(p=>normalizeWard(p.ward||'')).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">전체 병동</option>';
+  wards.forEach(w => sel.innerHTML += `<option value="${w}"${currentVal===w?' selected':''}>${w}</option>`);
+}
+
+async function setReasonMonth(mode) {
+  // 버튼 활성화 표시
+  document.querySelectorAll('#reasonMonthBtns button').forEach(b => {
+    b.style.cssText = 'padding:3px 10px;font-size:11.5px;';
+  });
+  const activeBtn = document.getElementById(mode==='current'?'reasonBtnCurrent':`reasonBtn_${mode}`);
+  if (activeBtn) activeBtn.style.cssText = 'padding:3px 10px;font-size:11.5px;background:var(--accent);color:#fff;border-color:var(--accent);';
+
+  _reasonMode = mode;
+  _reasonMonthData = null;
+
+  if (mode !== 'current') {
+    const tbody = document.getElementById('reasonTableBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)">📅 ${mode} 데이터 불러오는 중...</td></tr>`;
+
+    // 해당 월의 가장 마지막 날짜 데이터 사용 (해당 월 전체 사유 합산)
+    try {
+      const res = await fetch(`${FIREBASE_DB_URL}/dashboard/history.json?shallow=true`);
+      const keys = await res.json();
+      const monthKeys = Object.keys(keys||{}).filter(k=>k.startsWith(mode)).sort();
+      if (!monthKeys.length) throw new Error('no data');
+
+      // 해당 월의 모든 날짜에서 사유 합산
+      const mergedReasons = {};
+      let latestPatients = [], latestPrescs = [], latestUploadDate = '';
+      for (const dk of monthKeys) {
+        const [pRes, rxRes, rRes, udRes] = await Promise.all([
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/patients.json`),
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/prescriptions.json`),
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/reasons.json`),
+          fetch(`${FIREBASE_DB_URL}/dashboard/history/${dk}/uploadDate.json`),
+        ]);
+        if (pRes.ok) { const p = await pRes.json(); if (p) latestPatients = p; }
+        if (rxRes.ok) { const r = await rxRes.json(); if (r) latestPrescs = r; }
+        if (rRes.ok) { const r = await rRes.json(); if (r) Object.assign(mergedReasons, r); }
+        if (udRes.ok) { const d = await udRes.json(); if (d) latestUploadDate = d; }
+      }
+      _reasonMonthData = { patients:latestPatients, prescriptions:latestPrescs, reasons:mergedReasons, uploadDate:latestUploadDate };
+    } catch(e) {
+      const tbody = document.getElementById('reasonTableBody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--danger)">데이터를 불러올 수 없습니다</td></tr>`;
+      return;
+    }
+  }
+  renderReasonTable();
+}
+
+function renderReasonTable() {
+  const tbody = document.getElementById('reasonTableBody');
+  if (!tbody) return;
+
+  const wardFilter = document.getElementById('reasonWardFilter')?.value || '';
+  const src = _reasonMode === 'current'
+    ? { patients: state.patients, prescriptions: state.prescriptions, reasons: state.reasons }
+    : (_reasonMonthData || { patients:[], prescriptions:[], reasons:{} });
+
+  // 권고대상 미처방 중 사유가 입력된 환자
+  const allTargets = getAllMatchedPatientsFrom(src.patients);
+  const ex871Ids = new Set((src.prescriptions||[]).filter(x=>x.type==='EX871').map(x=>x.patientId));
+  const e6544Ids = new Set((src.prescriptions||[]).filter(x=>x.type==='E6544').map(x=>x.patientId));
+
+  const rows = allTargets.filter(p => {
+    if (!p.isRecommended) return false;
+    const prescribed = ex871Ids.has(p.id) || e6544Ids.has(p.id);
+    if (prescribed) return false;
+    const reason = (src.reasons||{})[p.id];
+    if (!reason || !reason.trim()) return false;
+    if (wardFilter && normalizeWard(p.ward) !== wardFilter) return false;
+    return true;
+  });
+
+  const countEl = document.getElementById('reasonCount');
+  if (countEl) countEl.textContent = `총 ${rows.length}명`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)">미처방 사유가 입력된 환자가 없습니다</td></tr>`;
+    return;
+  }
+
+  // 병동-병실 순 정렬
+  rows.sort((a,b) => {
+    const wa = normalizeWard(a.ward||''), wb = normalizeWard(b.ward||'');
+    if (wa !== wb) return wa.localeCompare(wb);
+    return (a.room||'').localeCompare(b.room||'');
+  });
+
+  tbody.innerHTML = '';
+  rows.forEach(p => {
+    const reason = (src.reasons||{})[p.id] || '';
+    const isEx = p.isEx871Target;
+    const isE6 = p.isE6544Target;
+    const exCell = isEx ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>';
+    const e6Cell = isE6 ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>';
+    const recCell = p.e6544ByAgeRule
+      ? '<span class="tag recommend" style="font-size:10px">✅ 연령기준</span>'
+      : '<span class="tag recommend" style="font-size:10px">✅ 권고</span>';
+    tbody.innerHTML += `<tr style="background:rgba(255,243,224,.4)">
+      <td style="white-space:nowrap"><strong>${normalizeWard(p.ward)||'—'}</strong></td>
+      <td style="white-space:nowrap">${p.room||'—'}</td>
+      <td><strong>${maskName(p.name)}</strong></td>
+      <td>${p.sa}</td>
+      <td>${p.dept}</td>
+      <td style="white-space:nowrap">${p.doctor||'—'}</td>
+      <td style="color:${p.days<=3?'var(--success)':'inherit'}">${p.days}일</td>
+      <td style="max-width:180px;font-size:11.5px">${p.disease}</td>
+      <td>${recCell}</td>
+      <td>${exCell}</td>
+      <td>${e6Cell}</td>
+      <td style="color:var(--warn);font-weight:600;max-width:200px">${reason}</td>
+    </tr>`;
+  });
+}
+
+// 히스토리 데이터용 getAllMatchedPatients (state 대신 주어진 patients 사용)
+function getAllMatchedPatientsFrom(patients) {
+  if (!patients || !patients.length) return [];
+  const savedPatients = state.patients;
+  const savedPrescs = state.prescriptions;
+  // 임시로 state 교체
+  state.patients = patients;
+  state.prescriptions = [];
+  const result = getAllMatchedPatients();
+  state.patients = savedPatients;
+  state.prescriptions = savedPrescs;
+  return result;
+}
 
 // ═══════════════════════════════════════════════════════════
 // 병동별 월별 사용 현황 — 1~5월 실적(엑셀 원본), 6월~는 Firebase history 합산
@@ -2326,6 +2533,9 @@ function renderGlobalStats() {
 
   // 병동별 월별 사용 현황 대시보드 (1~5월 실적 + 6월~ Firebase 합산)
   renderWardMonthDashboard();
+
+  // 미처방 사유 현황 초기화
+  initReasonSection();
 }
 
 let toastTimer;
