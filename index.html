@@ -1712,6 +1712,9 @@ function renderHeroBanner() {
   const allTargets = getAllMatchedPatients();
   const recTargets = allTargets.filter(p=>p.isRecommended);
   const recWaiting = recTargets.filter(p=>!isPrescribed(p));
+  // 미처방 사유가 입력된 환자는 "실질 대기중"에서 제외
+  const reasonedCount = recWaiting.filter(p => state.reasons[p.id] && state.reasons[p.id].trim()).length;
+  const netWaiting = Math.max(0, recWaiting.length - reasonedCount);
   const recRate = recTargets.length ? Math.round((recTargets.length-recWaiting.length)/recTargets.length*100) : 0;
 
   const ex871PrescIds = new Set(state.prescriptions.filter(x=>x.type==='EX871').map(x=>x.patientId));
@@ -1722,30 +1725,24 @@ function renderHeroBanner() {
   document.getElementById('hero-date-prefix').textContent = koDate ? `${koDate}에` : '오늘';
   document.getElementById('hero-total-presc').textContent = totalPrescCount;
   document.getElementById('hero-rec-target').textContent = recTargets.length;
-  document.getElementById('hero-rec-waiting').textContent = recWaiting.length;
+  document.getElementById('hero-rec-waiting').textContent = netWaiting;
   document.getElementById('hero-rec-rate').textContent = recRate + '%';
 
-  // 대기 중 인원이 있으면 빨간 강조 박스 + 펄스, 0명이면 초록색으로 전환
   const urgentWrap = document.getElementById('hero-stat-waiting-wrap');
   const waitingNum = document.getElementById('hero-rec-waiting');
   const waitingLabel = urgentWrap.querySelector('.hero-stat-label');
-  if (recWaiting.length > 0) {
+  if (netWaiting > 0) {
     urgentWrap.className = 'hero-stat hero-stat-urgent';
     waitingNum.className = 'hero-stat-num hero-waiting-num';
     waitingLabel.style.color = '#c0392b';
-    waitingLabel.textContent = '⚠ 아직 대기중';
+    waitingLabel.textContent = `⚠ 아직 대기중${reasonedCount>0?' (사유입력 '+reasonedCount+'명 제외)':''}`;
   } else {
     urgentWrap.className = 'hero-stat';
-    urgentWrap.style.background = '#f0faf4';
-    urgentWrap.style.border = '2px solid var(--success)';
-    urgentWrap.style.borderRadius = '12px';
-    urgentWrap.style.padding = '10px 18px';
-    urgentWrap.style.animation = 'none';
+    urgentWrap.style.cssText = 'background:#f0faf4;border:2px solid var(--success);border-radius:12px;padding:10px 18px;animation:none;';
     waitingNum.className = 'hero-stat-num';
-    waitingNum.style.color = 'var(--success)';
-    waitingNum.style.fontSize = '34px';
+    waitingNum.style.cssText = 'color:var(--success);font-size:34px;';
     waitingLabel.style.color = 'var(--success)';
-    waitingLabel.textContent = '✅ 전원 처방 완료';
+    waitingLabel.textContent = recWaiting.length > 0 ? `✅ 전원 사유 입력 완료` : '✅ 전원 처방 완료';
   }
 
   const subText = recWaiting.length > 0
@@ -1797,6 +1794,14 @@ function getWardSummaries() {
     if (w) ensureWard(w).prescRowCount += 1;
   });
 
+  // 미처방 사유 입력 수: 권고대상이면서 미처방이고 사유가 입력된 환자 수 (병동별)
+  allTargets.forEach(p => {
+    if (p.isRecommended && !isPrescribed(p) && state.reasons[p.id] && state.reasons[p.id].trim()) {
+      const w = normalizeWard(p.ward);
+      if (wards[w]) wards[w].reasonCount = (wards[w].reasonCount || 0) + 1;
+    }
+  });
+
   return wards;
 }
 
@@ -1818,7 +1823,9 @@ function renderWardGrid() {
   const sortedWards = [...wardKeys].sort((a,b) => {
     if (a === state.myWard) return -1;
     if (b === state.myWard) return 1;
-    return wards[b].recUnprescribed - wards[a].recUnprescribed;
+    const netA = Math.max(0, (wards[a].recUnprescribed||0) - (wards[a].reasonCount||0));
+    const netB = Math.max(0, (wards[b].recUnprescribed||0) - (wards[b].reasonCount||0));
+    return netB - netA;
   });
 
   sortedWards.forEach(w => {
@@ -1827,9 +1834,11 @@ function renderWardGrid() {
     const isMy = w === state.myWard;
     const isExpanded = state.expandedWard === w;
     const hasUrgent = d.recUnprescribed > 0;
+    const reasonCount = d.reasonCount || 0;
+    const netUnprescribed = Math.max(0, d.recUnprescribed - reasonCount); // 사유 미입력 = 실제 미처방
 
     const card = document.createElement('div');
-    card.className = `ward-card ${isMy?'is-my-ward':''} ${isExpanded?'expanded':''} ${hasUrgent?'has-urgent':''}`;
+    card.className = `ward-card ${isMy?'is-my-ward':''} ${isExpanded?'expanded':''} ${netUnprescribed>0?'has-urgent':''}`;
     card.onclick = () => toggleWardAccordion(w);
     card.innerHTML = `
       <div class="ward-card-name">${w} ${isMy?'<span class="my-badge">내병동</span>':''}</div>
@@ -1842,11 +1851,16 @@ function renderWardGrid() {
           <div class="wh-num">${d.prescRowCount||0}<span class="wh-unit">건</span></div>
           <div class="wh-label">금일 하이카디처방 수</div>
         </div>
-        <div class="ward-highlight-box recommend ${hasUrgent?'urgent':''}">
-          <div class="wh-num">${d.recUnprescribed}<span class="wh-unit">명</span></div>
+        <div class="ward-highlight-box recommend ${netUnprescribed>0?'urgent':''}">
+          <div class="wh-num">${netUnprescribed}<span class="wh-unit">명</span></div>
           <div class="wh-label">추가 권고 대상자</div>
         </div>
       </div>
+      ${reasonCount > 0 ? `
+      <div style="display:flex;gap:6px;margin:4px 8px 0;font-size:11px;color:var(--muted);align-items:center">
+        <span style="color:#e0922e;font-weight:600">※ 사유 입력 ${reasonCount}명</span>
+        <span style="color:var(--muted)">(전체 미처방 ${d.recUnprescribed}명 중)</span>
+      </div>` : ''}
       <div class="ward-card-chevron">▼</div>
     `;
     grid.appendChild(card);
@@ -1863,10 +1877,13 @@ function renderWardGrid() {
   // 내 병동 요약 문구
   if (state.myWard && wards[state.myWard]) {
     const d = wards[state.myWard];
+    const net = Math.max(0, d.recUnprescribed - (d.reasonCount||0));
     document.getElementById('myWardSummary').innerHTML =
-      d.recUnprescribed > 0
-        ? `현재 ${state.myWard}에 <strong>미처방 ${d.recUnprescribed}명</strong> 있습니다`
-        : `${state.myWard} 미처방 환자 없음 ✅`;
+      net > 0
+        ? `현재 ${state.myWard}에 <strong>미처방 ${net}명</strong> 있습니다${d.reasonCount>0?` (사유 입력 ${d.reasonCount}명 포함 시 총 ${d.recUnprescribed}명)`:''}`
+        : d.recUnprescribed > 0
+          ? `${state.myWard} 미처방 ${d.recUnprescribed}명 — 전원 사유 입력 완료 ✅`
+          : `${state.myWard} 미처방 환자 없음 ✅`;
   } else {
     document.getElementById('myWardSummary').textContent = '';
   }
