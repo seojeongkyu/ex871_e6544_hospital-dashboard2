@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>병동별 처방 권고 대시보드</title>
+<title>Hicardi 스마트 심전도 모니터링 플랫폼</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
@@ -20,7 +20,7 @@
     display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 10px;
     box-shadow: 0 1px 3px rgba(47,127,214,.06); }
   .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .logo { font-size: 17px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+  .logo { font-size: 15px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
   .date-badge-block { display: flex; flex-direction: column; gap: 1px; }
   .date-badge-main { background: var(--surface2); border: 1.5px solid var(--accent); border-radius: 8px;
     padding: 7px 16px; font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: -0.3px; }
@@ -306,7 +306,7 @@
 <div id="accessGate">
   <div class="gate-box" id="gateBox">
     <div class="gate-logo">🏥</div>
-    <div class="gate-title">병동별 처방 권고 대시보드</div>
+    <div class="gate-title">Hicardi 스마트 심전도 모니터링 플랫폼</div>
     <div class="gate-sub">원내망 외부에서 접속하셨습니다.<br>관리자로부터 발급받은 접근 코드를 입력하세요.</div>
     <div class="gate-badge" id="gateIpBadge">🔍 네트워크 확인 중...</div>
     <input type="password" id="gateCodeInput" placeholder="접근 코드 입력"
@@ -341,7 +341,7 @@
 
 <header class="header">
   <div class="header-left">
-    <div class="logo">🏥 병동별 처방 권고 대시보드</div>
+    <div class="logo">💓 Hicardi 스마트 심전도 모니터링 플랫폼</div>
     <div class="date-badge-block">
       <div class="date-badge-main" id="dateLabel">—</div>
       <div class="date-badge-sub" id="dateLabelSub"></div>
@@ -352,7 +352,7 @@
   <div class="upload-zone">
     <button class="upload-btn ref" id="refUploadBtn" onclick="document.getElementById('refInput').click()" style="display:none">① 기준표 업로드</button>
     <input type="file" id="refInput" accept=".xlsx,.xls" onchange="handleRefUpload(event)">
-    <button class="upload-btn" id="dailyUploadBtn" onclick="onDailyUploadClick()">② 오늘자 재원·처방 업로드</button>
+    <button class="upload-btn" id="dailyUploadBtn" onclick="onDailyUploadClick()">② 오늘자 재원·운영 업로드</button>
     <input type="file" id="dailyInput" accept=".xlsx,.xls,.csv" multiple onchange="handleDailyUpload(event)">
     <button class="upload-btn secondary" onclick="loadSampleData()">샘플 보기</button>
     <button class="upload-btn secondary" id="adminToggleBtn" onclick="onAdminToggleClick()" title="관리자 모드" style="display:none">🔒 관리자</button>
@@ -415,8 +415,8 @@
     <h3>먼저 기준표를 업로드해 주세요</h3>
     <div class="step-card">
       <div><span class="step-num">1</span><strong>기준표 업로드</strong> — EX871·E6544 상병코드/상병명 정의 파일 (최초 1회만)</div>
-      <div><span class="step-num">2</span><strong>오늘자 재원환자 + 처방 파일 업로드</strong> — 매일 14시, 2개 파일 동시 선택</div>
-      <div><span class="step-num">3</span>병동 카드를 클릭하면 그 병동의 처방 대상 환자 명단이 펼쳐집니다</div>
+      <div><span class="step-num">2</span><strong>오늘자 재원환자 + 운영 파일 업로드</strong> — 매일 14시, 2개 파일 동시 선택</div>
+      <div><span class="step-num">3</span>병동 카드를 클릭하면 그 병동의 모니터링 대상 환자 명단이 펼쳐집니다</div>
     </div>
     <br>
     <button class="upload-btn" onclick="loadSampleData()">▶ 샘플 데이터로 미리보기</button>
@@ -429,8 +429,8 @@
       <div class="hero-main">
         <div class="hero-icon">🎉</div>
         <div>
-          <div class="hero-text-big"><span id="hero-date-prefix">오늘</span> <span class="num" id="hero-total-presc">—</span>명 처방했어요!</div>
-          <div class="hero-text-sub" id="hero-sub-text">EX871·E6544 처방 현황 — 모두 수고하셨습니다</div>
+          <div class="hero-text-big"><span id="hero-date-prefix">오늘</span> <span class="num" id="hero-total-presc">—</span>명에게 모니터링 적용했어요!</div>
+          <div class="hero-text-sub" id="hero-sub-text">EX871·E6544 운영 현황 — 모두 수고하셨습니다</div>
         </div>
       </div>
       <div class="hero-divider"></div>
@@ -445,7 +445,7 @@
         </div>
         <div class="hero-stat">
           <div class="hero-stat-num" id="hero-rec-rate">—</div>
-          <div class="hero-stat-label">권고대상 처방률</div>
+          <div class="hero-stat-label">권고대상 적용률</div>
         </div>
       </div>
     </div>
@@ -470,28 +470,28 @@
     </div>
     <div class="global-section" id="globalSection">
 
-      <div class="kpi-section-label">💉 금일 Hicardi 처방 현황 (조건 무관, 병원 전체)<div class="line"></div></div>
+      <div class="kpi-section-label">💉 금일 Hicardi 운영 현황 (조건 무관, 병원 전체)<div class="line"></div></div>
       <div class="kpi-row">
-        <div class="kpi-card success"><div class="kpi-label">오늘 처방 완료(전체)</div><div class="kpi-value" id="kpi-today-total-presc" style="color:var(--success)">—</div><div class="kpi-sub">EX871+E6544 처방받은 모든 환자</div></div>
-        <div class="kpi-card"><div class="kpi-label">EX871 처방</div><div class="kpi-value" id="kpi-today-ex871" style="color:var(--accent)">—</div><div class="kpi-sub">건수</div></div>
-        <div class="kpi-card"><div class="kpi-label">E6544 처방</div><div class="kpi-value" id="kpi-today-e6544" style="color:var(--accent2)">—</div><div class="kpi-sub">건수</div></div>
-        <div class="kpi-card"><div class="kpi-label">처방 중 권고대상 비율</div><div class="kpi-value" id="kpi-today-rec-ratio">—</div><div class="kpi-sub">전체 처방자 중 70세+·5일내·건보자보</div></div>
+        <div class="kpi-card success"><div class="kpi-label">오늘 적용 완료(전체)</div><div class="kpi-value" id="kpi-today-total-presc" style="color:var(--success)">—</div><div class="kpi-sub">EX871+E6544 처방받은 모든 환자</div></div>
+        <div class="kpi-card"><div class="kpi-label">EX871 운영</div><div class="kpi-value" id="kpi-today-ex871" style="color:var(--accent)">—</div><div class="kpi-sub">건수</div></div>
+        <div class="kpi-card"><div class="kpi-label">E6544 운영</div><div class="kpi-value" id="kpi-today-e6544" style="color:var(--accent2)">—</div><div class="kpi-sub">건수</div></div>
+        <div class="kpi-card"><div class="kpi-label">적용 중 권고대상 비율</div><div class="kpi-value" id="kpi-today-rec-ratio">—</div><div class="kpi-sub">전체 처방자 중 70세+·5일내·건보자보</div></div>
       </div>
 
       <div class="kpi-section-label">📊 전체 대상자 현황 (나이 무관)<div class="line"></div></div>
       <div class="kpi-row">
         <div class="kpi-card accent"><div class="kpi-label">전체 재원환자</div><div class="kpi-value" id="kpi-total" style="color:var(--accent)">—</div><div class="kpi-sub">현재 입원 중</div></div>
         <div class="kpi-card"><div class="kpi-label">상병 해당자(전체)</div><div class="kpi-value" id="kpi-all-target">—</div><div class="kpi-sub">EX871/E6544 매칭</div></div>
-        <div class="kpi-card success"><div class="kpi-label">처방 완료(전체)</div><div class="kpi-value" id="kpi-all-prescribed" style="color:var(--success)">—</div><div class="kpi-sub">나이 무관</div></div>
-        <div class="kpi-card danger"><div class="kpi-label">미처방(전체)</div><div class="kpi-value" id="kpi-all-unprescribed" style="color:var(--danger)">—</div><div class="kpi-sub">참고용</div></div>
+        <div class="kpi-card success"><div class="kpi-label">적용 완료(전체)</div><div class="kpi-value" id="kpi-all-prescribed" style="color:var(--success)">—</div><div class="kpi-sub">나이 무관</div></div>
+        <div class="kpi-card danger"><div class="kpi-label">미적용(전체)</div><div class="kpi-value" id="kpi-all-unprescribed" style="color:var(--danger)">—</div><div class="kpi-sub">참고용</div></div>
       </div>
 
-      <div class="kpi-section-label">⚠ 처방 권고 대상 (70세↑·5일내·건보/자보)<div class="line"></div></div>
+      <div class="kpi-section-label">⚠ 모니터링 권고 대상 (70세↑·5일내·건보/자보)<div class="line"></div></div>
       <div class="kpi-row">
         <div class="kpi-card warn"><div class="kpi-label">권고 대상자</div><div class="kpi-value" id="kpi-rec-target" style="color:var(--warn)">—</div><div class="kpi-sub">조건 충족 환자 수</div></div>
-        <div class="kpi-card danger"><div class="kpi-label">⚠ 미처방(권고대상)</div><div class="kpi-value" id="kpi-rec-unprescribed" style="color:var(--danger)">—</div><div class="kpi-sub">즉시 처방 필요</div></div>
-        <div class="kpi-card success"><div class="kpi-label">처방 완료(권고대상)</div><div class="kpi-value" id="kpi-rec-prescribed" style="color:var(--success)">—</div><div class="kpi-sub">권고대상 중</div></div>
-        <div class="kpi-card"><div class="kpi-label">권고대상 처방률</div><div class="kpi-value" id="kpi-rec-rate">—</div><div class="kpi-sub">권고대상 기준</div></div>
+        <div class="kpi-card danger"><div class="kpi-label">⚠ 미적용(권고대상)</div><div class="kpi-value" id="kpi-rec-unprescribed" style="color:var(--danger)">—</div><div class="kpi-sub">즉시 처방 필요</div></div>
+        <div class="kpi-card success"><div class="kpi-label">적용 완료(권고대상)</div><div class="kpi-value" id="kpi-rec-prescribed" style="color:var(--success)">—</div><div class="kpi-sub">권고대상 중</div></div>
+        <div class="kpi-card"><div class="kpi-label">권고대상 적용률</div><div class="kpi-value" id="kpi-rec-rate">—</div><div class="kpi-sub">권고대상 기준</div></div>
       </div>
 
       <!-- 병동별 월별 사용 현황 대시보드 -->
@@ -525,10 +525,10 @@
         </div>
       </div>
 
-      <!-- 월별 병동별 처방 비교 차트 (EX871+E6544 누적 막대) -->
+      <!-- 월별 병동별 운영 비교 차트 (EX871+E6544 누적 막대) -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header" style="flex-wrap:wrap;gap:8px">
-          <div class="card-title">📊 월별 병동별 처방 현황 (EX871 + E6544)</div>
+          <div class="card-title">📊 월별 병동별 운영 현황 (EX871 + E6544)</div>
           <div id="wardBarMonthBtns" style="display:flex;gap:4px;flex-wrap:wrap"></div>
         </div>
         <div class="card-body">
@@ -536,10 +536,10 @@
         </div>
       </div>
 
-      <!-- 미처방 사유 현황 -->
+      <!-- 미운영 사유 현황 -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header" style="flex-wrap:wrap;gap:8px">
-          <div class="card-title">📋 미처방 사유 현황</div>
+          <div class="card-title">📋 미운영 사유 현황</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span style="font-size:11px;color:var(--muted)">월:</span>
             <div id="reasonMonthBtns" style="display:flex;gap:4px;flex-wrap:wrap">
@@ -562,7 +562,7 @@
               <th>진료과</th><th>주치의</th><th>재원일수</th>
               <th style="max-width:160px">상병명</th><th>권고</th>
               <th>EX871</th><th>E6544</th>
-              <th style="min-width:180px">미처방 사유</th>
+              <th style="min-width:180px">미운영 사유</th>
             </tr></thead>
             <tbody id="reasonTableBody">
               <tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)">데이터 로딩 중...</td></tr>
@@ -648,7 +648,7 @@ async function runAccessGate() {
       badge.style.borderColor = '#2f9e6e';
       document.getElementById('gateBox').innerHTML = `
         <div class="gate-logo">🏥</div>
-        <div class="gate-title">병동별 처방 권고 대시보드</div>
+        <div class="gate-title">Hicardi 스마트 심전도 모니터링 플랫폼</div>
         <div style="margin-top:16px" class="gate-ip-ok">✅ 원내망 접속이 확인되었습니다<br><span style="font-size:11px;font-weight:400;color:#6b8299">${ip}</span></div>
         <div style="margin-top:18px;font-size:13px;color:#6b8299">잠시 후 자동으로 이동합니다...</div>
       `;
@@ -979,7 +979,7 @@ function onAdminToggleClick() {
     showToast('🔒 관리자 모드가 잠겼습니다');
   }
 }
-// "② 오늘자 재원·처방 업로드" 버튼 클릭 — 관리자 모드 진입의 유일한 통로
+// "② 오늘자 재원·운영 업로드" 버튼 클릭 — 관리자 모드 진입의 유일한 통로
 let pendingAdminAction = null;
 function onDailyUploadClick() {
   if (state.isAdmin) {
@@ -1081,7 +1081,7 @@ function updateRefBanner() {
   // refExCount / refE6Count 요소는 수가 지침 배너로 교체되어 더 이상 존재하지 않음
   if (has) {
     document.getElementById('statusDotEl').className = 'status-dot warn';
-    document.getElementById('statusText').textContent = '기준표 OK — 오늘자 데이터 대기중';
+    document.getElementById('statusText').textContent = '기준표 OK — 데이터 대기중';
     document.getElementById('statusText').style.color = 'var(--warn)';
   }
 }
@@ -1364,7 +1364,7 @@ function getPrescriptionStatus(p) {
 }
 function isPrescribed(p) {
   const {ex871Presc, e6544Presc} = getPrescriptionStatus(p);
-  // 실제로 EX871이든 E6544든 하나라도 Hicardi 처방을 받았으면 처방완료로 인정.
+  // 실제로 EX871이든 E6544든 하나라도 Hicardi 처방을 받았으면 적용완료로 인정.
   // (어떤 상병으로 권고됐는지와 무관하게, 모니터링 처방 자체가 이미 나간 것이 핵심)
   return ex871Presc || e6544Presc;
 }
@@ -1375,7 +1375,7 @@ function isPrescribed(p) {
 let wardChartInst = null;
 
 // ═══════════════════════════════════════════════════════════
-// 미처방 사유 현황
+// 미운영 사유 현황
 // ═══════════════════════════════════════════════════════════
 let _reasonMode = 'current';   // 'current' | 'YYYY-MM'
 let _reasonMonthData = null;   // 히스토리에서 불러온 {patients, prescriptions, reasons, uploadDate}
@@ -1475,7 +1475,7 @@ function renderReasonTable() {
     ? { patients: state.patients, prescriptions: state.prescriptions, reasons: state.reasons }
     : (_reasonMonthData || { patients:[], prescriptions:[], reasons:{} });
 
-  // 권고대상 미처방 중 사유가 입력된 환자
+  // 권고대상 미적용 중 사유가 입력된 환자
   const allTargets = getAllMatchedPatientsFrom(src.patients);
   const ex871Ids = new Set((src.prescriptions||[]).filter(x=>x.type==='EX871').map(x=>x.patientId));
   const e6544Ids = new Set((src.prescriptions||[]).filter(x=>x.type==='E6544').map(x=>x.patientId));
@@ -1494,7 +1494,7 @@ function renderReasonTable() {
   if (countEl) countEl.textContent = `총 ${rows.length}명`;
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)">미처방 사유가 입력된 환자가 없습니다</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)">미운영 사유가 입력된 환자가 없습니다</td></tr>`;
     return;
   }
 
@@ -1510,8 +1510,8 @@ function renderReasonTable() {
     const reason = (src.reasons||{})[p.id] || '';
     const isEx = p.isEx871Target;
     const isE6 = p.isE6544Target;
-    const exCell = isEx ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>';
-    const e6Cell = isE6 ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>';
+    const exCell = isEx ? '<span class="tag unprescribed">미적용</span>' : '<span class="tag none">해당없음</span>';
+    const e6Cell = isE6 ? '<span class="tag unprescribed">미적용</span>' : '<span class="tag none">해당없음</span>';
     const recCell = p.e6544ByAgeRule
       ? '<span class="tag recommend" style="font-size:10px">✅ 연령기준</span>'
       : '<span class="tag recommend" style="font-size:10px">✅ 권고</span>';
@@ -1635,7 +1635,7 @@ function renderWardBarChart() {
       scales: {
         x: { stacked:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
         y: { stacked:true, beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
-             title:{display:true, text:'처방 건수', color:'#6b8299', font:{size:11}} }
+             title:{display:true, text:'운영 건수', color:'#6b8299', font:{size:11}} }
       }
     }
   });
@@ -1779,7 +1779,7 @@ function renderWardMonthChart() {
       scales: {
         x: { ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'} },
         y: { beginAtZero:true, ticks:{color:'#6b8299'}, grid:{color:'#e3edf5'},
-             title:{display:true, text:'처방 건수', color:'#6b8299', font:{size:11}} }
+             title:{display:true, text:'운영 건수', color:'#6b8299', font:{size:11}} }
       }
     }
   });
@@ -1880,7 +1880,7 @@ function initDashboard() {
   }
 
   document.getElementById('statusDotEl').className = 'status-dot live';
-  document.getElementById('statusText').textContent = state.viewingDate ? '과거 데이터 보기 중' : '오늘자 데이터 로드됨';
+  document.getElementById('statusText').textContent = state.viewingDate ? '과거 데이터 보기 중' : '오늘 데이터 로드됨';
   document.getElementById('statusText').style.color = state.viewingDate ? 'var(--warn)' : 'var(--success)';
 
   state.myWard = loadMyWard();
@@ -1919,7 +1919,7 @@ function renderHeroBanner() {
   const allTargets = getAllMatchedPatients();
   const recTargets = allTargets.filter(p=>p.isRecommended);
   const recWaiting = recTargets.filter(p=>!isPrescribed(p));
-  // 미처방 사유가 입력된 환자는 "실질 대기중"에서 제외
+  // 미운영 사유가 입력된 환자는 "실질 대기중"에서 제외
   const reasonedCount = recWaiting.filter(p => state.reasons[p.id] && state.reasons[p.id].trim()).length;
   const netWaiting = Math.max(0, recWaiting.length - reasonedCount);
   const recRate = recTargets.length ? Math.round((recTargets.length-recWaiting.length)/recTargets.length*100) : 0;
@@ -1949,12 +1949,12 @@ function renderHeroBanner() {
     waitingNum.className = 'hero-stat-num';
     waitingNum.style.cssText = 'color:var(--success);font-size:34px;';
     waitingLabel.style.color = 'var(--success)';
-    waitingLabel.textContent = recWaiting.length > 0 ? `✅ 전원 사유 입력 완료` : '✅ 전원 처방 완료';
+    waitingLabel.textContent = recWaiting.length > 0 ? `✅ 전원 미운영 사유 입력 완료` : '✅ 전원 모니터링 적용 완료';
   }
 
   const subText = recWaiting.length > 0
-    ? `현재 권고대상 ${recTargets.length}명 중 ${recWaiting.length}명이 아직 처방 대기중입니다. 여러분의 노고로 환자 안전을 지킬 수 있습니다 🙏`
-    : `권고대상 환자 전원 처방이 완료되었습니다. 여러분의 노고로 환자 안전을 지켜냈습니다 🙏`;
+    ? `현재 권고대상 ${recTargets.length}명 중 ${recWaiting.length}명이 아직 모니터링 미적용 중입니다. 여러분의 노고로 환자 안전을 지킬 수 있습니다 🙏`
+    : `권고대상 환자 전원 모니터링 적용이 완료되었습니다. 여러분의 노고로 환자 안전을 지켜냈습니다 🙏`;
   document.getElementById('hero-sub-text').textContent = subText;
 
   const icon = recWaiting.length === 0 ? '🏆' : (recRate >= 70 ? '🎉' : '📣');
@@ -1994,14 +1994,14 @@ function getWardSummaries() {
     ensureWard(normalizeWard(p.ward)).patientCount += 1;
   });
 
-  // 금일 하이카디 처방 건수(중복 포함, 엑셀 행 수 기준)
+  // 금일 하이카디 운영 건수(중복 포함, 엑셀 행 수 기준)
   const patientWardMap = new Map(state.patients.map(p => [p.id, p.ward]));
   state.prescriptions.forEach(x => {
     const w = patientWardMap.get(x.patientId);
     if (w) ensureWard(w).prescRowCount += 1;
   });
 
-  // 미처방 사유 입력 수: 권고대상이면서 미처방이고 사유가 입력된 환자 수 (병동별)
+  // 미운영 사유 입력 수: 권고대상이면서 미적용이고 사유가 입력된 환자 수 (병동별)
   allTargets.forEach(p => {
     if (p.isRecommended && !isPrescribed(p) && state.reasons[p.id] && state.reasons[p.id].trim()) {
       const w = normalizeWard(p.ward);
@@ -2026,7 +2026,7 @@ function renderWardGrid() {
   const grid = document.getElementById('wardGrid');
   grid.innerHTML = '';
 
-  // 정렬: 내 병동 먼저, 그다음 미처방 많은 순
+  // 정렬: 내 병동 먼저, 그다음 미적용 많은 순
   const sortedWards = [...wardKeys].sort((a,b) => {
     if (a === state.myWard) return -1;
     if (b === state.myWard) return 1;
@@ -2042,7 +2042,7 @@ function renderWardGrid() {
     const isExpanded = state.expandedWard === w;
     const hasUrgent = d.recUnprescribed > 0;
     const reasonCount = d.reasonCount || 0;
-    const netUnprescribed = Math.max(0, d.recUnprescribed - reasonCount); // 사유 미입력 = 실제 미처방
+    const netUnprescribed = Math.max(0, d.recUnprescribed - reasonCount); // 사유 미입력 = 실제 미적용
 
     const card = document.createElement('div');
     card.className = `ward-card ${isMy?'is-my-ward':''} ${isExpanded?'expanded':''} ${netUnprescribed>0?'has-urgent':''}`;
@@ -2056,17 +2056,17 @@ function renderWardGrid() {
       <div class="ward-highlight-row">
         <div class="ward-highlight-box presc">
           <div class="wh-num">${d.prescRowCount||0}<span class="wh-unit">건</span></div>
-          <div class="wh-label">금일 하이카디처방 수</div>
+          <div class="wh-label">금일 적용 건수</div>
         </div>
         <div class="ward-highlight-box recommend ${netUnprescribed>0?'urgent':''}">
           <div class="wh-num">${netUnprescribed}<span class="wh-unit">명</span></div>
-          <div class="wh-label">추가 권고 대상자</div>
+          <div class="wh-label">모니터링 미적용 환자</div>
         </div>
       </div>
       ${reasonCount > 0 ? `
       <div style="display:flex;gap:6px;margin:4px 8px 0;font-size:11px;color:var(--muted);align-items:center">
         <span style="color:#e0922e;font-weight:600">※ 사유 입력 ${reasonCount}명</span>
-        <span style="color:var(--muted)">(전체 미처방 ${d.recUnprescribed}명 중)</span>
+        <span style="color:var(--muted)">(전체 미적용 ${d.recUnprescribed}명 중)</span>
       </div>` : ''}
       <div class="ward-card-chevron">▼</div>
     `;
@@ -2087,10 +2087,10 @@ function renderWardGrid() {
     const net = Math.max(0, d.recUnprescribed - (d.reasonCount||0));
     document.getElementById('myWardSummary').innerHTML =
       net > 0
-        ? `현재 ${state.myWard}에 <strong>미처방 ${net}명</strong> 있습니다${d.reasonCount>0?` (사유 입력 ${d.reasonCount}명 포함 시 총 ${d.recUnprescribed}명)`:''}`
+        ? `현재 ${state.myWard}에 <strong>미적용 ${net}명</strong> 있습니다${d.reasonCount>0?` (사유 입력 ${d.reasonCount}명 포함 시 총 ${d.recUnprescribed}명)`:''}`
         : d.recUnprescribed > 0
-          ? `${state.myWard} 미처방 ${d.recUnprescribed}명 — 전원 사유 입력 완료 ✅`
-          : `${state.myWard} 미처방 환자 없음 ✅`;
+          ? `${state.myWard} 미적용 ${d.recUnprescribed}명 — 전원 미운영 사유 입력 완료 ✅`
+          : `${state.myWard} 미적용 환자 없음 ✅`;
   } else {
     document.getElementById('myWardSummary').textContent = '';
   }
@@ -2129,7 +2129,7 @@ function renderWardAccordion(ward, panel) {
 
   panel.innerHTML = `
     <div class="accordion-header">
-      <div class="accordion-title">${ward} 처방 대상 환자 명단</div>
+      <div class="accordion-title">${ward} 모니터링 대상 환자 명단</div>
       <label id="wardConfLabel-${ward}" class="ward-confirm-label ${wardConf.checked?'ward-confirm-done':''}"
         onclick="event.stopPropagation()">
         <input type="checkbox" id="wardConf-${ward}"
@@ -2137,7 +2137,7 @@ function renderWardAccordion(ward, panel) {
           ${isViewingHistory ? 'disabled' : ''}
           onchange="toggleWardConfirm('${ward}', this.checked)">
         <span class="ward-confirm-text">
-          ${wardConf.checked ? '✅' : '☐'} ${dateLabel}자 처방 권고 대상 환자 확인 완료
+          ${wardConf.checked ? '✅' : '☐'} ${dateLabel}자 심전도 모니터링 대상 환자 확인 완료
         </span>
       </label>
       <button class="accordion-close" onclick="event.stopPropagation(); toggleWardAccordion('${ward}')">✕ 닫기</button>
@@ -2146,8 +2146,8 @@ function renderWardAccordion(ward, panel) {
       <div class="tabs">
         <button class="tab-btn ${state.wardTab==='all'?'active':''}" onclick="setWardTab('all')">전체</button>
         <button class="tab-btn ${state.wardTab==='recommend'?'active':''}" onclick="setWardTab('recommend')">⚠ 권고대상만</button>
-        <button class="tab-btn ${state.wardTab==='unprescribed'?'active':''}" onclick="setWardTab('unprescribed')">🔴 권고대상 中 미처방</button>
-        <button class="tab-btn ${state.wardTab==='prescribed-any'?'active':''}" onclick="setWardTab('prescribed-any')">✅ 처방완료 전체(조건무관)</button>
+        <button class="tab-btn ${state.wardTab==='unprescribed'?'active':''}" onclick="setWardTab('unprescribed')">🔴 권고대상 中 미적용</button>
+        <button class="tab-btn ${state.wardTab==='prescribed-any'?'active':''}" onclick="setWardTab('prescribed-any')">✅ 적용완료 전체(조건무관)</button>
       </div>
       <div class="filter-row">
         <input class="search-input" id="ptSearch-${ward}" placeholder="환자명 / 등록번호 검색" oninput="renderWardPatientTable('${ward}')">
@@ -2155,7 +2155,7 @@ function renderWardAccordion(ward, panel) {
       <div class="table-scroll">
         <table class="pt-table">
           <thead>
-            <tr><th>병실</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>주치의</th><th>재원일수</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미처방 사유</th></tr>
+            <tr><th>병실</th><th>환자명</th><th>성/연령</th><th>진료과</th><th>주치의</th><th>재원일수</th><th>상병명</th><th>권고</th><th>EX871</th><th>E6544</th><th>미운영 사유</th></tr>
           </thead>
           <tbody id="ptTableBody-${ward}"></tbody>
         </table>
@@ -2191,7 +2191,7 @@ function getWardPrescribedAny(ward) {
 function renderWardPatientTable(ward) {
   const tab = state.wardTab;
 
-  // "처방완료 전체(조건무관)" 탭은 별도 데이터 소스 사용
+  // "적용완료 전체(조건무관)" 탭은 별도 데이터 소스 사용
   if (tab === 'prescribed-any') {
     renderWardPrescribedAnyTable(ward);
     return;
@@ -2206,7 +2206,7 @@ function renderWardPatientTable(ward) {
   if (search) pts = pts.filter(p=>maskName(p.name).toLowerCase().includes(search)||p.room?.includes(search));
 
   pts.sort((a,b) => {
-    // 1순위: 추가 권고 대상자(미처방+권고대상) 먼저, 2순위: 금일 처방완료 환자, 3순위: 권고대상 아닌 환자
+    // 1순위: 모니터링 미적용 환자(미적용+권고대상) 먼저, 2순위: 금일 적용완료 환자, 3순위: 권고대상 아닌 환자
     const score = p => (p.isRecommended && !isPrescribed(p)) ? 0 : (isPrescribed(p) ? 1 : 2);
     return score(a) - score(b);
   });
@@ -2233,11 +2233,11 @@ function renderWardPatientTable(ward) {
     const savedReason = state.reasons[p.id] || '';
 
     const exCell = ex871Presc
-      ? '<span class="tag prescribed">처방완료</span>'
-      : (p.isEx871Target ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>');
+      ? '<span class="tag prescribed">적용완료</span>'
+      : (p.isEx871Target ? '<span class="tag unprescribed">미적용</span>' : '<span class="tag none">해당없음</span>');
     const e6Cell = e6544Presc
-      ? '<span class="tag prescribed">처방완료</span>'
-      : (p.isE6544Target ? '<span class="tag unprescribed">미처방</span>' : '<span class="tag none">해당없음</span>');
+      ? '<span class="tag prescribed">적용완료</span>'
+      : (p.isE6544Target ? '<span class="tag unprescribed">미적용</span>' : '<span class="tag none">해당없음</span>');
     const recCell = p.isRecommended
       ? (p.e6544ByAgeRule ? '<span class="tag recommend">✅ 연령기준</span>' : '<span class="tag recommend">✅ 권고</span>')
       : '<span class="tag norecommend">—</span>';
@@ -2247,7 +2247,7 @@ function renderWardPatientTable(ward) {
 
     tbody.innerHTML += `<tr class="${rowClass}" id="ptrow-${p.id}">
       <td style="white-space:nowrap">${p.room||'—'}</td>
-      <td><strong>${maskName(p.name)}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 처방필요</span>':''}</td>
+      <td><strong>${maskName(p.name)}</strong>${showReasonInput?'<br><span class="unpresc-badge">⚠ 모니터링 필요</span>':''}</td>
       <td>${p.sa}</td>
       <td>${p.dept}</td>
       <td style="white-space:nowrap">${p.doctor||'—'}</td>
@@ -2258,7 +2258,7 @@ function renderWardPatientTable(ward) {
       <td>${e6Cell}</td>
       <td>
         ${showReasonInput?`
-          <input class="reason-input" id="reason-${p.id}" placeholder="미처방 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${isViewingHistory?'disabled':''}>
+          <input class="reason-input" id="reason-${p.id}" placeholder="미운영 사유…" value="${savedReason}" oninput="state.reasons['${p.id}']=this.value" ${isViewingHistory?'disabled':''}>
           <button class="save-btn" onclick="saveReason('${p.id}')" ${isViewingHistory?'disabled':''}>저장</button>
         `:(savedReason?`<span style="font-size:11px;color:var(--muted)">${savedReason}</span>`:'<span style="color:var(--muted);font-size:11px">—</span>')}
       </td>
@@ -2266,7 +2266,7 @@ function renderWardPatientTable(ward) {
   });
 }
 
-// "처방완료 전체(조건무관)" 탭 렌더링 — 나이/보험/재원일수와 무관하게 EX871/E6544 처방받은 모든 환자
+// "적용완료 전체(조건무관)" 탭 렌더링 — 나이/보험/재원일수와 무관하게 EX871/E6544 처방받은 모든 환자
 function renderWardPrescribedAnyTable(ward) {
   let pts = getWardPrescribedAny(ward);
   const searchEl = document.getElementById(`ptSearch-${ward}`);
@@ -2281,13 +2281,13 @@ function renderWardPrescribedAnyTable(ward) {
   tbody.innerHTML = '';
 
   if (!pts.length) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">처방받은 환자가 없습니다</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">모니터링 적용 환자가 없습니다</td></tr>`;
     return;
   }
 
   pts.forEach(p => {
-    const exCell = p.gotEx871 ? '<span class="tag prescribed">처방완료</span>' : '<span class="tag none">—</span>';
-    const e6Cell = p.gotE6544 ? '<span class="tag prescribed">처방완료</span>' : '<span class="tag none">—</span>';
+    const exCell = p.gotEx871 ? '<span class="tag prescribed">적용완료</span>' : '<span class="tag none">—</span>';
+    const e6Cell = p.gotE6544 ? '<span class="tag prescribed">적용완료</span>' : '<span class="tag none">—</span>';
     const recCell = p.meetsRecCond ? '<span class="tag recommend">✅ 권고조건 충족</span>' : '<span class="tag norecommend">조건 외(나이/보험/재원일수)</span>';
 
     tbody.innerHTML += `<tr class="prescribed-row">
@@ -2316,7 +2316,7 @@ function toggleWardConfirm(ward, checked) {
   const dateLabel = state.uploadDate
     ? (() => { const p=state.uploadDate.split('.'); return p.length>=3?`${parseInt(p[1])}월 ${parseInt(p[2])}일`:state.uploadDate; })()
     : '오늘';
-  if (textEl) textEl.textContent = `${checked?'✅':'☐'} ${dateLabel}자 처방 권고 대상 환자 확인 완료`;
+  if (textEl) textEl.textContent = `${checked?'✅':'☐'} ${dateLabel}자 심전도 모니터링 대상 환자 확인 완료`;
   // 저장
   try { localStorage.setItem('hosp_confirmations', JSON.stringify(state.confirmations)); } catch(e) {}
   fetch(`${FIREBASE_DB_URL}/dashboard/daily/confirmations.json`, {
@@ -2338,7 +2338,7 @@ function saveReason(id) {
     localStorage.setItem('hosp_reasons', JSON.stringify(state.reasons));
   } catch(e) {}
   syncToCloud();
-  showToast('💾 미처방 사유 저장 완료');
+  showToast('💾 미운영 사유 저장 완료');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2534,7 +2534,7 @@ function renderGlobalStats() {
   // 병동별 월별 사용 현황 대시보드 (1~5월 실적 + 6월~ Firebase 합산)
   renderWardMonthDashboard();
 
-  // 미처방 사유 현황 초기화
+  // 미운영 사유 현황 초기화
   initReasonSection();
 }
 
